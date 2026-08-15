@@ -286,28 +286,105 @@ function rgbToHsv(r,g,b){
 function hueDist(a,b){const d=Math.abs(a-b)%360;return Math.min(d,360-d)}
 
 function detectSaber(){
- saber.valid=false;saber.confidence=0;if(video.readyState<2)return;
- const W=small.width,H=small.height;sctx.save();sctx.translate(W,0);sctx.scale(-1,1);sctx.drawImage(video,0,0,W,H);sctx.restore();
- const img=sctx.getImageData(0,0,W,H),d=img.data;let pts=[];
- for(let y=0;y<H;y+=2)for(let x=0;x<W;x+=2){
-   const i=(y*W+x)*4,[h,s,v]=rgbToHsv(d[i],d[i+1],d[i+2]),bright=Math.max(d[i],d[i+1],d[i+2])/255;
-   if((hueDist(h,targetHue)<=hueTolerance&&s>=minSat&&v>=minVal)||(bright>.92&&s>.12))pts.push({x,y,w:Math.max(.2,s)*v});
- }
- if(pts.length<22){detText.textContent="SEARCHING";confidenceEl.textContent="0";return}
- let sw=0,mx=0,my=0;for(const p of pts){sw+=p.w;mx+=p.x*p.w;my+=p.y*p.w}mx/=sw;my/=sw;
- let cxx=0,cyy=0,cxy=0;for(const p of pts){const dx=p.x-mx,dy=p.y-my;cxx+=p.w*dx*dx;cyy+=p.w*dy*dy;cxy+=p.w*dx*dy}
- cxx/=sw;cyy/=sw;cxy/=sw;const theta=.5*Math.atan2(2*cxy,cxx-cyy),ux=Math.cos(theta),uy=Math.sin(theta);
- let minP=Infinity,maxP=-Infinity,orthoSum=0;
- for(const p of pts){const dx=p.x-mx,dy=p.y-my,proj=dx*ux+dy*uy,ortho=-dx*uy+dy*ux;minP=Math.min(minP,proj);maxP=Math.max(maxP,proj);orthoSum+=Math.abs(ortho)}
- const length=maxP-minP,meanOrtho=orthoSum/pts.length,elong=length/(meanOrtho*2+1);
- const conf=Math.max(0,Math.min(1,(pts.length/260)*.35+Math.min(1,elong/8)*.65));
- if(length<42||elong<2.7){detText.textContent="SEARCHING";confidenceEl.textContent=Math.round(conf*100);return}
- const rawX1=(mx+ux*minP)/W*innerWidth,rawY1=(my+uy*minP)/H*innerHeight,rawX2=(mx+ux*maxP)/W*innerWidth,rawY2=(my+uy*maxP)/H*innerHeight;
- const cx=(rawX1+rawX2)/2,cy=(rawY1+rawY2)/2,rawDx=rawX2-rawX1,rawDy=rawY2-rawY1,rawLen=Math.hypot(rawDx,rawDy)||1,dirX=rawDx/rawLen,dirY=rawDy/rawLen;
- const fixed=Math.max(220,Math.min(330,innerHeight*.36)),half=fixed/2;
- let nx1=cx-dirX*half,ny1=cy-dirY*half,nx2=cx+dirX*half,ny2=cy+dirY*half;
- if(saber.valid){const sm=.42;nx1=saber.x1*(1-sm)+nx1*sm;ny1=saber.y1*(1-sm)+ny1*sm;nx2=saber.x2*(1-sm)+nx2*sm;ny2=saber.y2*(1-sm)+ny2*sm}
- saber={valid:true,x1:nx1,y1:ny1,x2:nx2,y2:ny2,confidence:conf};detText.textContent="DETECTED ✓";confidenceEl.textContent=Math.round(conf*100)
+  saber.valid=false;saber.confidence=0;
+  if(video.readyState<2)return;
+
+  const W=small.width,H=small.height;
+  sctx.save();
+  sctx.translate(W,0);sctx.scale(-1,1);
+  sctx.drawImage(video,0,0,W,H);
+  sctx.restore();
+
+  const img=sctx.getImageData(0,0,W,H),d=img.data;
+  let pts=[];
+  for(let y=0;y<H;y+=2){
+    for(let x=0;x<W;x+=2){
+      const i=(y*W+x)*4;
+      const [h,s,v]=rgbToHsv(d[i],d[i+1],d[i+2]);
+      const bright=Math.max(d[i],d[i+1],d[i+2])/255;
+      // User-selected hue + brightness; allow blown-out white core via neighboring saturation.
+      if((hueDist(h,targetHue)<=hueTolerance && s>=minSat && v>=minVal) || (bright>.92 && s>.12)){
+        pts.push({x,y,w:Math.max(.2,s)*v});
+      }
+    }
+  }
+  if(pts.length<22){
+    detText.textContent="SEARCHING";
+    confidenceEl.textContent="0";
+    return;
+  }
+
+  let sw=0,mx=0,my=0;
+  for(const p of pts){sw+=p.w;mx+=p.x*p.w;my+=p.y*p.w}
+  mx/=sw;my/=sw;
+
+  let cxx=0,cyy=0,cxy=0;
+  for(const p of pts){
+    const dx=p.x-mx,dy=p.y-my;
+    cxx+=p.w*dx*dx;cyy+=p.w*dy*dy;cxy+=p.w*dx*dy;
+  }
+  cxx/=sw;cyy/=sw;cxy/=sw;
+  const theta=.5*Math.atan2(2*cxy,cxx-cyy);
+  const ux=Math.cos(theta),uy=Math.sin(theta);
+
+  let minP=Infinity,maxP=-Infinity;
+  let orthoSum=0;
+  for(const p of pts){
+    const dx=p.x-mx,dy=p.y-my;
+    const proj=dx*ux+dy*uy;
+    const ortho=-dx*uy+dy*ux;
+    minP=Math.min(minP,proj);maxP=Math.max(maxP,proj);
+    orthoSum+=Math.abs(ortho);
+  }
+  const length=maxP-minP;
+  const meanOrtho=orthoSum/pts.length;
+  const elong=length/(meanOrtho*2+1);
+
+  const conf=Math.max(0,Math.min(1,(pts.length/260)*.35 + Math.min(1,elong/8)*.65));
+  if(length<42 || elong<2.7){
+    detText.textContent="SEARCHING";
+    confidenceEl.textContent=Math.round(conf*100);
+    return;
+  }
+
+  // 検出した発光部分から「位置」と「角度」だけを使い、
+  // ゲーム内の剣の長さは固定する。
+  // これにより、反射光や残像を拾ったときに剣が異常に長くなるのを防ぐ。
+  const rawX1=(mx+ux*minP)/W*innerWidth;
+  const rawY1=(my+uy*minP)/H*innerHeight;
+  const rawX2=(mx+ux*maxP)/W*innerWidth;
+  const rawY2=(my+uy*maxP)/H*innerHeight;
+
+  const cx=(rawX1+rawX2)/2;
+  const cy=(rawY1+rawY2)/2;
+
+  const rawDx=rawX2-rawX1;
+  const rawDy=rawY2-rawY1;
+  const rawLen=Math.hypot(rawDx,rawDy)||1;
+  const dirX=rawDx/rawLen;
+  const dirY=rawDy/rawLen;
+
+  // 画面サイズに応じた固定長。大画面でも長くなりすぎない。
+  const FIXED_SABER_LENGTH=Math.max(220,Math.min(330,innerHeight*0.36));
+  const half=FIXED_SABER_LENGTH/2;
+
+  let nx1=cx-dirX*half;
+  let ny1=cy-dirY*half;
+  let nx2=cx+dirX*half;
+  let ny2=cy+dirY*half;
+
+  // 少しだけ平滑化してガタつきを抑える。
+  if(saber.valid){
+    const SMOOTH=.42;
+    nx1=saber.x1*(1-SMOOTH)+nx1*SMOOTH;
+    ny1=saber.y1*(1-SMOOTH)+ny1*SMOOTH;
+    nx2=saber.x2*(1-SMOOTH)+nx2*SMOOTH;
+    ny2=saber.y2*(1-SMOOTH)+ny2*SMOOTH;
+  }
+
+  saber={valid:true,x1:nx1,y1:ny1,x2:nx2,y2:ny2,confidence:conf};
+  detText.textContent="DETECTED ✓";
+  confidenceEl.textContent=Math.round(conf*100);
 }
 function sampleHueNearSegment(seg){
  if(video.readyState<2)return null;
@@ -542,30 +619,52 @@ function drawBolt(b){
 }
 let saberTrail=[];
 function drawSaber(){
- if(!saber.valid)return;
+ if(!saber.valid){
+   // 徐々に残光だけ消す
+   if(saberTrail.length>0)saberTrail.shift();
+   return;
+ }
 
- saberTrail.push({x1:saber.x1,y1:saber.y1,x2:saber.x2,y2:saber.y2,t:performance.now()});
- if(saberTrail.length>7)saberTrail.shift();
+ // 描画専用のコピーを残光に保存。追跡データ自体は変更しない。
+ saberTrail.push({
+   x1:saber.x1,y1:saber.y1,
+   x2:saber.x2,y2:saber.y2
+ });
+ if(saberTrail.length>6)saberTrail.shift();
 
  ctx.save();
- for(let i=0;i<saberTrail.length;i++){
-   const s=saberTrail[i],a=(i+1)/saberTrail.length*.16;
-   ctx.strokeStyle=`hsla(${targetHue},100%,70%,${a})`;
-   ctx.lineWidth=22*(i+1)/saberTrail.length;
+
+ for(let i=0;i<saberTrail.length-1;i++){
+   const s=saberTrail[i];
+   const alpha=.03 + (i/saberTrail.length)*.10;
+   ctx.strokeStyle=`hsla(${targetHue},100%,70%,${alpha})`;
+   ctx.lineWidth=10 + i*1.5;
    ctx.lineCap="round";
-   ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();
+   ctx.beginPath();
+   ctx.moveTo(s.x1,s.y1);
+   ctx.lineTo(s.x2,s.y2);
+   ctx.stroke();
  }
 
  ctx.strokeStyle=`hsl(${targetHue} 100% 70%)`;
  ctx.shadowColor=`hsl(${targetHue} 100% 55%)`;
- ctx.shadowBlur=30;
- ctx.lineWidth=18;ctx.lineCap="round";
- ctx.beginPath();ctx.moveTo(saber.x1,saber.y1);ctx.lineTo(saber.x2,saber.y2);ctx.stroke();
+ ctx.shadowBlur=28;
+ ctx.lineWidth=18;
+ ctx.lineCap="round";
+ ctx.beginPath();
+ ctx.moveTo(saber.x1,saber.y1);
+ ctx.lineTo(saber.x2,saber.y2);
+ ctx.stroke();
 
  ctx.strokeStyle="#fff";
- ctx.shadowBlur=10;ctx.lineWidth=6;
- ctx.beginPath();ctx.moveTo(saber.x1,saber.y1);ctx.lineTo(saber.x2,saber.y2);ctx.stroke();
- ctx.restore()
+ ctx.shadowBlur=9;
+ ctx.lineWidth=6;
+ ctx.beginPath();
+ ctx.moveTo(saber.x1,saber.y1);
+ ctx.lineTo(saber.x2,saber.y2);
+ ctx.stroke();
+
+ ctx.restore();
 }
 function drawParticles(){for(const p of particles){ctx.globalAlpha=1-p.age/p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1}
 
