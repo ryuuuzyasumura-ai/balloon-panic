@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>風船パニック</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#07111f; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    #app { position:relative; width:100vw; height:100vh; }
+    #video { display:none; }
+    #game { position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+    .hud {
+      position:absolute; inset:0; pointer-events:none;
+      color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.55);
+    }
+    .topbar {
+      position:absolute; top:18px; left:22px; right:22px;
+      display:flex; justify-content:space-between; align-items:flex-start; gap:16px;
+      font-weight:800;
+    }
+    .score { font-size:clamp(24px,4vw,52px); }
+    .time  { font-size:clamp(24px,4vw,52px); }
+    .status {
+      position:absolute; left:50%; top:22px; transform:translateX(-50%);
+      font-size:clamp(14px,2vw,24px); opacity:.95; text-align:center; white-space:nowrap;
+    }
+
+    #overlay {
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      background:linear-gradient(180deg, rgba(3,12,24,.65), rgba(3,12,24,.86));
+      color:#fff; padding:24px;
+    }
+    .panel {
+      width:min(680px,92vw); background:rgba(15,29,48,.92); border:1px solid rgba(255,255,255,.15);
+      border-radius:28px; padding:clamp(24px,5vw,48px); text-align:center;
+      box-shadow:0 24px 80px rgba(0,0,0,.35);
+    }
+    h1 { margin:0 0 12px; font-size:clamp(34px,7vw,72px); line-height:1; }
+    p { margin:10px 0; font-size:clamp(15px,2.2vw,22px); line-height:1.6; color:#dbe9ff; }
+    .small { font-size:14px; opacity:.78; }
+    button {
+      margin-top:24px; border:0; border-radius:999px; padding:18px 34px;
+      font-size:clamp(18px,2.5vw,28px); font-weight:900; cursor:pointer;
+      background:#fff; color:#0b1a2b; min-width:220px;
+    }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    #error { color:#ffd4d4; margin-top:14px; min-height:1.2em; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="game"></canvas>
+
+  <div class="hud">
+    <div class="topbar">
+      <div class="score">SCORE <span id="score">0</span></div>
+      <div class="time"><span id="time">30</span> 秒</div>
+    </div>
+    <div class="status" id="status">準備中…</div>
+  </div>
+
+  <div id="overlay">
+    <div class="panel">
+      <h1>🎈 風船パニック</h1>
+      <p>カメラの前に立って、<strong>両手で風船を割ろう！</strong></p>
+      <p>30秒で何点とれるかな？</p>
+      <button id="startBtn">カメラを起動</button>
+      <div id="error"></div>
+      <p class="small">※ カメラ映像はブラウザ内で処理します。</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  FilesetResolver,
+  PoseLandmarker
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm";
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const overlay = document.getElementById("overlay");
+const startBtn = document.getElementById("startBtn");
+const scoreEl = document.getElementById("score");
+const timeEl = document.getElementById("time");
+const statusEl = document.getElementById("status");
+const errorEl = document.getElementById("error");
+
+let poseLandmarker = null;
+let stream = null;
+let running = false;
+let gameStarted = false;
+let gameEnded = false;
+let score = 0;
+let remaining = 30;
+let startTime = 0;
+let lastVideoTime = -1;
+let lastSpawn = 0;
+let balloons = [];
+let particles = [];
+let hitPoints = [];
+let audioCtx = null;
+
+function resizeCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.floor(innerWidth * dpr);
+  canvas.height = Math.floor(innerHeight * dpr);
+  canvas.style.width = innerWidth + "px";
+  canvas.style.height = innerHeight + "px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+async function initPose() {
+  if (poseLandmarker) return;
+  statusEl.textContent = "人体認識AIを読み込み中…";
+
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+  );
+
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO",
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.5,
+    minPosePresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+}
+
+async function startCamera() {
+  errorEl.textContent = "";
+  startBtn.disabled = true;
+  try {
+    await initPose();
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: "user",
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    overlay.style.display = "none";
+    running = true;
+    statusEl.textContent = "カメラの前で全身が映る位置に立ってください";
+    requestAnimationFrame(loop);
+
+    setTimeout(beginGame, 1800);
+  } catch (err) {
+    console.error(err);
+    startBtn.disabled = false;
+    errorEl.textContent =
+      "カメラを起動できませんでした。ブラウザのカメラ許可を確認してください。";
+    statusEl.textContent = "カメラを起動できません";
+  }
+}
+startBtn.addEventListener("click", startCamera);
+
+function beginGame() {
+  score = 0;
+  remaining = 30;
+  balloons = [];
+  particles = [];
+  scoreEl.textContent = "0";
+  timeEl.textContent = "30";
+  startTime = performance.now();
+  lastSpawn = 0;
+  gameStarted = true;
+  gameEnded = false;
+  statusEl.textContent = "手で風船を割ろう！";
+}
+
+function spawnBalloon(now) {
+  const w = innerWidth;
+  const radius = Math.max(28, Math.min(54, w * 0.035));
+  const palette = [
+    ["#ff5470", 10],
+    ["#4dd7ff", 10],
+    ["#7fef9b", 10],
+    ["#ffd84d", 30]
+  ];
+  const special = Math.random() < 0.12;
+  const [color, points] = special ? palette[3] : palette[Math.floor(Math.random()*3)];
+  balloons.push({
+    x: radius + Math.random() * (w - radius*2),
+    y: -radius - 10,
+    r: special ? radius * 1.05 : radius,
+    speed: 120 + Math.random()*120,
+    sway: (Math.random()-.5)*55,
+    color,
+    points,
+    born: now,
+    popped:false
+  });
+}
+
+function popSound(points) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(points >= 30 ? 700 : 420, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(180, audioCtx.currentTime + .08);
+  gain.gain.setValueAtTime(.12, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + .1);
+  osc.start();
+  osc.stop(audioCtx.currentTime + .1);
+}
+
+function createBurst(x,y,color) {
+  for (let i=0;i<16;i++) {
+    const a = Math.random()*Math.PI*2;
+    const s = 80+Math.random()*220;
+    particles.push({
+      x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s,
+      life:.55, age:0, color
+    });
+  }
+}
+
+function updatePose(now) {
+  if (!poseLandmarker || video.readyState < 2) return;
+  if (video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+
+  const result = poseLandmarker.detectForVideo(video, now);
+  hitPoints = [];
+
+  if (result.landmarks && result.landmarks.length) {
+    const lm = result.landmarks[0];
+
+    // MediaPipe: 15=左手首, 16=右手首
+    [15,16].forEach(i => {
+      const p = lm[i];
+      if (p && (p.visibility ?? 1) > 0.35) {
+        // カメラ映像を鏡表示するためXを反転
+        hitPoints.push({
+          x:(1-p.x)*innerWidth,
+          y:p.y*innerHeight,
+          r:42
+        });
+      }
+    });
+    statusEl.textContent = gameEnded ? "ゲーム終了！" : "手で風船を割ろう！";
+  } else {
+    statusEl.textContent = "人を探しています… カメラから少し離れてみてください";
+  }
+}
+
+function updateGame(now, dt) {
+  if (!gameStarted || gameEnded) return;
+
+  const elapsed = (now - startTime)/1000;
+  remaining = Math.max(0, Math.ceil(30 - elapsed));
+  timeEl.textContent = remaining;
+
+  if (elapsed >= 30) {
+    endGame();
+    return;
+  }
+
+  const spawnInterval = Math.max(330, 720 - elapsed*8);
+  if (now-lastSpawn > spawnInterval) {
+    spawnBalloon(now);
+    lastSpawn = now;
+  }
+
+  for (const b of balloons) {
+    b.y += b.speed*dt;
+    b.x += Math.sin((now-b.born)/500)*b.sway*dt;
+
+    for (const h of hitPoints) {
+      const dx = b.x-h.x, dy = b.y-h.y;
+      if (!b.popped && Math.hypot(dx,dy) < b.r+h.r) {
+        b.popped = true;
+        score += b.points;
+        scoreEl.textContent = score;
+        createBurst(b.x,b.y,b.color);
+        popSound(b.points);
+      }
+    }
+  }
+  balloons = balloons.filter(b => !b.popped && b.y < innerHeight+b.r+20);
+
+  for (const p of particles) {
+    p.age += dt;
+    p.x += p.vx*dt;
+    p.y += p.vy*dt;
+    p.vy += 420*dt;
+  }
+  particles = particles.filter(p => p.age < p.life);
+}
+
+function drawBackground() {
+  const g = ctx.createLinearGradient(0,0,0,innerHeight);
+  g.addColorStop(0,"#17375f");
+  g.addColorStop(1,"#07111f");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,innerWidth,innerHeight);
+
+  // カメラ映像を薄く鏡表示
+  if (video.readyState >= 2) {
+    ctx.save();
+    ctx.globalAlpha = .20;
+    ctx.translate(innerWidth,0);
+    ctx.scale(-1,1);
+    const vw=video.videoWidth, vh=video.videoHeight;
+    const scale=Math.max(innerWidth/vw, innerHeight/vh);
+    const dw=vw*scale, dh=vh*scale;
+    ctx.drawImage(video,(innerWidth-dw)/2,(innerHeight-dh)/2,dw,dh);
+    ctx.restore();
+
+    ctx.fillStyle="rgba(5,15,28,.38)";
+    ctx.fillRect(0,0,innerWidth,innerHeight);
+  }
+}
+
+function drawBalloon(b) {
+  ctx.save();
+  ctx.translate(b.x,b.y);
+  ctx.beginPath();
+  ctx.ellipse(0,0,b.r*.78,b.r,0,0,Math.PI*2);
+  ctx.fillStyle=b.color;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.ellipse(-b.r*.23,-b.r*.28,b.r*.16,b.r*.28,-.5,0,Math.PI*2);
+  ctx.fillStyle="rgba(255,255,255,.42)";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(-6,b.r*.92);
+  ctx.lineTo(0,b.r+10);
+  ctx.lineTo(6,b.r*.92);
+  ctx.fillStyle=b.color;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(0,b.r+10);
+  ctx.quadraticCurveTo(10,b.r+28,-4,b.r+46);
+  ctx.strokeStyle="rgba(255,255,255,.65)";
+  ctx.lineWidth=2;
+  ctx.stroke();
+
+  if (b.points >= 30) {
+    ctx.fillStyle="#4b3900";
+    ctx.font=`900 ${Math.max(16,b.r*.5)}px system-ui`;
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText("★",0,1);
+  }
+  ctx.restore();
+}
+
+function drawHands() {
+  for (const h of hitPoints) {
+    const grd = ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,h.r);
+    grd.addColorStop(0,"rgba(255,255,255,.95)");
+    grd.addColorStop(.22,"rgba(87,220,255,.9)");
+    grd.addColorStop(1,"rgba(87,220,255,0)");
+    ctx.fillStyle=grd;
+    ctx.beginPath();
+    ctx.arc(h.x,h.y,h.r,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle="rgba(255,255,255,.9)";
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(h.x,h.y,18,0,Math.PI*2);
+    ctx.stroke();
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const alpha = 1-p.age/p.life;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,5,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function loop(now) {
+  if (!running) return;
+  const dt = Math.min(.033, (loop.last ? (now-loop.last)/1000 : .016));
+  loop.last = now;
+
+  updatePose(now);
+  updateGame(now,dt);
+
+  drawBackground();
+  balloons.forEach(drawBalloon);
+  drawParticles();
+  drawHands();
+
+  requestAnimationFrame(loop);
+}
+
+function endGame() {
+  gameEnded = true;
+  gameStarted = false;
+  statusEl.textContent = "ゲーム終了！";
+
+  overlay.style.display = "flex";
+  overlay.innerHTML = `
+    <div class="panel">
+      <h1>🎉 FINISH!</h1>
+      <p style="font-size:clamp(28px,6vw,60px);font-weight:900;margin:20px 0;">
+        SCORE ${score}
+      </p>
+      <p>${score >= 500 ? "すごい！風船マスター！" : score >= 250 ? "ナイスプレイ！" : "もう一回挑戦しよう！"}</p>
+      <button id="againBtn">もう一回</button>
+      <p class="small">カメラはそのまま使用します。</p>
+    </div>`;
+  document.getElementById("againBtn").addEventListener("click", () => {
+    overlay.style.display="none";
+    beginGame();
+  });
+}
+</script>
+</body>
+</html>
