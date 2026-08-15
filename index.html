@@ -261,12 +261,42 @@ function detectSaber(){
     return;
   }
 
-  const x1=(mx+ux*minP)/W*innerWidth;
-  const y1=(my+uy*minP)/H*innerHeight;
-  const x2=(mx+ux*maxP)/W*innerWidth;
-  const y2=(my+uy*maxP)/H*innerHeight;
+  // 検出した発光部分から「位置」と「角度」だけを使い、
+  // ゲーム内の剣の長さは固定する。
+  // これにより、反射光や残像を拾ったときに剣が異常に長くなるのを防ぐ。
+  const rawX1=(mx+ux*minP)/W*innerWidth;
+  const rawY1=(my+uy*minP)/H*innerHeight;
+  const rawX2=(mx+ux*maxP)/W*innerWidth;
+  const rawY2=(my+uy*maxP)/H*innerHeight;
 
-  saber={valid:true,x1,y1,x2,y2,confidence:conf};
+  const cx=(rawX1+rawX2)/2;
+  const cy=(rawY1+rawY2)/2;
+
+  const rawDx=rawX2-rawX1;
+  const rawDy=rawY2-rawY1;
+  const rawLen=Math.hypot(rawDx,rawDy)||1;
+  const dirX=rawDx/rawLen;
+  const dirY=rawDy/rawLen;
+
+  // 画面サイズに応じた固定長。大画面でも長くなりすぎない。
+  const FIXED_SABER_LENGTH=Math.max(220,Math.min(330,innerHeight*0.36));
+  const half=FIXED_SABER_LENGTH/2;
+
+  let nx1=cx-dirX*half;
+  let ny1=cy-dirY*half;
+  let nx2=cx+dirX*half;
+  let ny2=cy+dirY*half;
+
+  // 少しだけ平滑化してガタつきを抑える。
+  if(saber.valid){
+    const SMOOTH=.42;
+    nx1=saber.x1*(1-SMOOTH)+nx1*SMOOTH;
+    ny1=saber.y1*(1-SMOOTH)+ny1*SMOOTH;
+    nx2=saber.x2*(1-SMOOTH)+nx2*SMOOTH;
+    ny2=saber.y2*(1-SMOOTH)+ny2*SMOOTH;
+  }
+
+  saber={valid:true,x1:nx1,y1:ny1,x2:nx2,y2:ny2,confidence:conf};
   detText.textContent="DETECTED ✓";
   confidenceEl.textContent=Math.round(conf*100);
 }
