@@ -95,6 +95,28 @@ button:disabled{opacity:.45;cursor:wait}
 .playerPick{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:25px}
 .playerPick button{min-width:230px;font-size:24px;padding:22px}
 .runnerKey{display:inline-block;padding:3px 8px;margin:2px;border-radius:6px;background:rgba(255,255,255,.12);font-weight:900}
+
+#actionCue{
+  position:absolute;
+  left:50%;
+  top:34%;
+  transform:translate(-50%,-50%);
+  z-index:18;
+  text-align:center;
+  pointer-events:none;
+  display:none;
+}
+#actionCue .main{
+  font-size:clamp(42px,7vw,92px);
+  font-weight:1000;
+  letter-spacing:.04em;
+  text-shadow:0 0 28px rgba(255,90,60,.9),0 4px 10px rgba(0,0,0,.6);
+}
+#actionCue .sub{
+  font-size:clamp(16px,2vw,28px);
+  font-weight:900;
+  margin-top:4px;
+}
 </style>
 
 </head>
@@ -102,7 +124,7 @@ button:disabled{opacity:.45;cursor:wait}
 <div id="app">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
-  <div id="version">Ver. 2.1 BODY SYNC + CROSS BEAM</div>
+  <div id="version">Ver. 2.2 ACTION GUIDE</div>
   <div id="debug"></div>
 
   <div id="hud">
@@ -137,6 +159,10 @@ button:disabled{opacity:.45;cursor:wait}
     </div>
     <button id="backBtn">← モード選択</button>
     <div id="status"></div>
+    <div id="actionCue">
+      <div class="main" id="actionCueMain"></div>
+      <div class="sub" id="actionCueSub"></div>
+    </div>
     <div id="countdown" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:min(18vw,180px);font-weight:1000;text-shadow:0 0 35px rgba(80,220,255,.9);display:none"></div>
   </div>
 
@@ -161,7 +187,7 @@ button:disabled{opacity:.45;cursor:wait}
           <p>ブロック世界を前進！<br>ジャンプ・しゃがみ・クロスビームで突破。</p>
         </div>
       </div>
-      <p class="small">APP READY ✓ / Ver. 2.1 BODY SYNC + CROSS BEAM</p>
+      <p class="small">APP READY ✓ / Ver. 2.2 ACTION GUIDE</p>
     </div>
   </section>
 
@@ -234,7 +260,7 @@ button:disabled{opacity:.45;cursor:wait}
 (function(){
 "use strict";
 
-const VERSION="2.1 BODY SYNC + CROSS BEAM";
+const VERSION="2.2 ACTION GUIDE";
 const $=id=>document.getElementById(id);
 const video=$("video"),canvas=$("game"),ctx=canvas.getContext("2d");
 const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen"),scanScreen=$("scanScreen"),playerScreen=$("playerScreen");
@@ -248,6 +274,7 @@ const livesEl=$("lives"),livesWrap=$("livesWrap"),countdownEl=$("countdown");
 const scoreBox=$("scoreBox"),timeBox=$("timeBox"),p1Box=$("p1Box"),p2Box=$("p2Box");
 const p1ScoreEl=$("p1Score"),p2ScoreEl=$("p2Score"),runnerInfo=$("runnerInfo");
 const runnerLivesEl=$("runnerLives"),runnerActionEl=$("runnerAction");
+const actionCue=$("actionCue"),actionCueMain=$("actionCueMain"),actionCueSub=$("actionCueSub");
 
 let mode=null,stream=null,running=false,gameStarted=false,gameEnded=false;
 let score=0,combo=0,startAt=0,lastFrame=0,lastSpawn=0,duration=45;
@@ -272,6 +299,8 @@ let runnerDistance=0;
 let runnerCleared=0;
 let runnerLastObstacle=0;
 let runnerShake=0;
+let runnerCueType=null;
+let runnerCueUrgency=0;
 let audioCtx=null;
 let pose=null,lastVideoTime=-1,lastPoseAt=0;
 let MP=null;
@@ -506,7 +535,7 @@ function beginGame(){
   scoreEl.textContent="0";comboEl.textContent="0";livesEl.textContent=lives;timeEl.textContent=duration;
   balloonScores=[0,0];p1ScoreEl.textContent="0";p2ScoreEl.textContent="0";
   runnerObjects=[];runnerLives=3;runnerLivesEl.textContent="3";runnerBaseline=null;runnerAction="RUN";
-  runnerBeamUntil=0;runnerBeamCooldownUntil=0;runnerCrossHold=0;runnerPrevWrists=[null,null];runnerDistance=0;runnerCleared=0;runnerLastObstacle=0;runnerShake=0;
+  runnerBeamUntil=0;runnerBeamCooldownUntil=0;runnerCrossHold=0;runnerPrevWrists=[null,null];runnerDistance=0;runnerCleared=0;runnerLastObstacle=0;runnerShake=0;runnerCueType=null;runnerCueUrgency=0;actionCue.style.display="none";
   floatingTexts=[];
   balloons=[];particles=[];enemies=[];bolts=[];hands=[];bodyPoints=[];saberTrail=[];
   startAt=performance.now();lastSpawn=0;gameStarted=true;gameEnded=false;
@@ -880,6 +909,44 @@ function updateRunner(now,dt){
       }
     }
   });
+
+  // 最も近い未処理障害物を案内
+  const upcoming=runnerObjects
+    .filter(o=>!o.resolved)
+    .sort((a,b)=>a.z-b.z)[0];
+
+  runnerCueType=null;
+  runnerCueUrgency=0;
+
+  if(upcoming){
+    // zが小さいほどプレイヤーに近い
+    if(upcoming.z<.58){
+      runnerCueType=upcoming.type;
+      runnerCueUrgency=Math.max(0,Math.min(1,(.58-upcoming.z)/.46));
+
+      actionCue.style.display="block";
+
+      if(upcoming.type==="jump"){
+        actionCueMain.textContent=runnerCueUrgency>.68?"JUMP NOW!":"JUMP";
+        actionCueSub.textContent=runnerCueUrgency>.68?"今ジャンプ！":"障害物が近づいています";
+      }else if(upcoming.type==="duck"){
+        actionCueMain.textContent=runnerCueUrgency>.68?"DUCK NOW!":"DUCK";
+        actionCueSub.textContent=runnerCueUrgency>.68?"今しゃがむ！":"ゲートが近づいています";
+      }else{
+        actionCueMain.textContent=runnerCueUrgency>.55?"CROSS NOW!":"CROSS";
+        actionCueSub.textContent=runnerCueUrgency>.55?"両手を胸の前でクロス！":"敵が近づいています";
+      }
+
+      const hue=runnerCueUrgency>.68?8:48;
+      actionCueMain.style.color=`hsl(${hue} 100% 66%)`;
+      actionCueSub.style.color=runnerCueUrgency>.68?"#fff":"#ffeaa0";
+    }else{
+      actionCue.style.display="none";
+    }
+  }else{
+    actionCue.style.display="none";
+  }
+
   runnerObjects=runnerObjects.filter(o=>o.z>-.12);
   runnerShake*=.82;
 }
@@ -1002,6 +1069,12 @@ function drawRunnerWorld(now){
     const s=55*p.scale;
     ctx.save();ctx.translate(x,p.y);
 
+    // アクションゾーン付近では障害物を強調
+    if(o.z<.38&&!o.resolved){
+      ctx.shadowColor="#ff5a47";
+      ctx.shadowBlur=26;
+    }
+
     if(o.type==="jump"){
       // 地面の壁：ジャンプ
       ctx.fillStyle="#b66f35";ctx.strokeStyle="#613b21";ctx.lineWidth=Math.max(2,4*p.scale);
@@ -1042,100 +1115,132 @@ function drawRunnerAvatar(){
   const by={};
   pl.bodyPoints.forEach(p=>by[p.i]=p);
   const LS=by[11],RS=by[12],LE=by[13],RE=by[14],LH=by[15],RH=by[16];
-  const LHIp=by[23],RHIp=by[24],LK=by[25],RK=by[26];
+  const LHip=by[23],RHip=by[24],LK=by[25],RK=by[26];
   if(!LS||!RS)return;
 
-  // カメラ上の体を、ゲーム画面下中央へ正規化して投影
   const shoulderMidX=(LS.x+RS.x)/2;
   const shoulderMidY=(LS.y+RS.y)/2;
-  const hipMidY=LHIp&&RHIp?(LHIp.y+RHIp.y)/2:shoulderMidY+180;
+  const hipMidY=LHip&&RHip?(LHip.y+RHip.y)/2:shoulderMidY+180;
   const torso=Math.max(90,hipMidY-shoulderMidY);
 
   const baseX=innerWidth/2;
   let baseY=innerHeight*.84;
-  if(runnerAction==="JUMP")baseY-=70;
-  if(runnerAction==="DUCK")baseY+=28;
+  if(runnerAction==="JUMP")baseY-=95;
+  if(runnerAction==="DUCK")baseY+=18;
 
-  const scale=Math.min(1.1,Math.max(.55,150/torso));
+  const scale=Math.min(1.15,Math.max(.58,155/torso));
 
-  function mapPt(p){
-    if(!p)return null;
-    return {
-      x:baseX+(p.x-shoulderMidX)*scale,
-      y:baseY-(hipMidY-p.y)*scale
-    };
+  const mapPt=p=>p?({
+    x:baseX+(p.x-shoulderMidX)*scale,
+    y:baseY-(hipMidY-p.y)*scale
+  }):null;
+
+  let aLS=mapPt(LS),aRS=mapPt(RS),aLE=mapPt(LE),aRE=mapPt(RE),aLH=mapPt(LH),aRH=mapPt(RH);
+  let aLHip=mapPt(LHip),aRHip=mapPt(RHip),aLK=mapPt(LK),aRK=mapPt(RK);
+
+  // しゃがみ中は画面上でも膝を曲げ、頭を低く見せる
+  if(runnerAction==="DUCK"){
+    if(aLK&&aLHip){aLK.x-=28;aLK.y=aLHip.y+36}
+    if(aRK&&aRHip){aRK.x+=28;aRK.y=aRHip.y+36}
+    aLS.y+=34;aRS.y+=34;aLE.y+=30;aRE.y+=30;
+    if(aLH)aLH.y+=28;if(aRH)aRH.y+=28;
   }
-
-  const aLS=mapPt(LS),aRS=mapPt(RS),aLE=mapPt(LE),aRE=mapPt(RE),aLH=mapPt(LH),aRH=mapPt(RH);
-  const aLHip=mapPt(LHIp),aRHip=mapPt(RHIp),aLK=mapPt(LK),aRK=mapPt(RK);
 
   ctx.save();
   ctx.lineCap="round";ctx.lineJoin="round";
 
-  // 発光する実体感のあるボディ
-  const limb=(a,b,w,color="#68d9ff")=>{
+  // 足元の影：ジャンプ状態が分かりやすい
+  ctx.fillStyle=runnerAction==="JUMP"?"rgba(0,0,0,.16)":"rgba(0,0,0,.32)";
+  ctx.beginPath();
+  ctx.ellipse(baseX,innerHeight*.91,runnerAction==="JUMP"?46:72,runnerAction==="JUMP"?10:16,0,0,Math.PI*2);
+  ctx.fill();
+
+  // 脚を太く描く
+  const limb=(a,b,w,color)=>{
     if(!a||!b)return;
-    ctx.strokeStyle=color;ctx.shadowColor=color;ctx.shadowBlur=18;ctx.lineWidth=w;
+    ctx.strokeStyle=color;
+    ctx.shadowColor=color;
+    ctx.shadowBlur=16;
+    ctx.lineWidth=w;
     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
-    ctx.strokeStyle="rgba(235,252,255,.9)";ctx.shadowBlur=4;ctx.lineWidth=Math.max(4,w*.26);
+
+    ctx.strokeStyle="rgba(235,250,255,.55)";
+    ctx.shadowBlur=0;
+    ctx.lineWidth=Math.max(4,w*.16);
     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
   };
 
-  limb(aLS,aLE,20);limb(aLE,aLH,18);
-  limb(aRS,aRE,20);limb(aRE,aRH,18);
-  limb(aLHip,aLK,22,"#75b6ff");limb(aRHip,aRK,22,"#75b6ff");
+  limb(aLHip,aLK,30,"#3f78bd");
+  limb(aRHip,aRK,30,"#3f78bd");
+  limb(aLS,aLE,27,"#63caed");
+  limb(aLE,aLH,25,"#63caed");
+  limb(aRS,aRE,27,"#63caed");
+  limb(aRE,aRH,25,"#63caed");
 
-  // 胴体
+  // 人らしい胴体シルエット
   if(aLS&&aRS&&aLHip&&aRHip){
-    ctx.fillStyle="rgba(25,115,170,.46)";
-    ctx.strokeStyle="#67ddff";ctx.lineWidth=4;ctx.shadowColor="#67ddff";ctx.shadowBlur=20;
+    const grad=ctx.createLinearGradient(0,aLS.y,0,aLHip.y);
+    grad.addColorStop(0,"rgba(48,158,207,.92)");
+    grad.addColorStop(1,"rgba(27,82,145,.92)");
+    ctx.fillStyle=grad;
+    ctx.strokeStyle="#90eaff";
+    ctx.lineWidth=4;
+    ctx.shadowColor="#4ddcff";
+    ctx.shadowBlur=18;
+
     ctx.beginPath();
-    ctx.moveTo(aLS.x,aLS.y);ctx.lineTo(aLHip.x,aLHip.y);
-    ctx.lineTo(aRHip.x,aRHip.y);ctx.lineTo(aRS.x,aRS.y);ctx.closePath();
-    ctx.fill();ctx.stroke();
+    ctx.moveTo(aLS.x,aLS.y);
+    ctx.quadraticCurveTo(aLHip.x-10,(aLS.y+aLHip.y)/2,aLHip.x,aLHip.y);
+    ctx.lineTo(aRHip.x,aRHip.y);
+    ctx.quadraticCurveTo(aRS.x+10,(aRS.y+aRHip.y)/2,aRS.x,aRS.y);
+    ctx.closePath();ctx.fill();ctx.stroke();
   }
 
-  // 頭（PLAYER SCANの顔を使用）
   const sw=Math.max(70,Math.hypot(aLS.x-aRS.x,aLS.y-aRS.y));
-  const hr=Math.min(48,Math.max(30,sw*.28));
+  const hr=Math.min(52,Math.max(32,sw*.29));
   const hx=(aLS.x+aRS.x)/2;
-  const hy=(aLS.y+aRS.y)/2-hr*1.45;
+  let hy=(aLS.y+aRS.y)/2-hr*1.42;
+  if(runnerAction==="DUCK")hy+=12;
 
+  // 頭
   ctx.save();
   ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);ctx.clip();
   if(playerFace)ctx.drawImage(playerFace,hx-hr,hy-hr,hr*2,hr*2);
-  else{ctx.fillStyle="#d6a77d";ctx.fillRect(hx-hr,hy-hr,hr*2,hr*2)}
+  else{
+    const skin=ctx.createRadialGradient(hx-10,hy-15,4,hx,hy,hr);
+    skin.addColorStop(0,"#f3c7a0");skin.addColorStop(1,"#c9946f");
+    ctx.fillStyle=skin;ctx.fillRect(hx-hr,hy-hr,hr*2,hr*2);
+  }
   ctx.restore();
-  ctx.strokeStyle="#bff6ff";ctx.lineWidth=4;ctx.shadowColor="#68ddff";ctx.shadowBlur=16;
+  ctx.strokeStyle="#d9fbff";ctx.lineWidth=4;ctx.shadowColor="#67e3ff";ctx.shadowBlur=15;
   ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);ctx.stroke();
 
-  // 手を強調
+  // 手
   for(const h of [aLH,aRH]){
     if(!h)continue;
-    const g=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,28);
-    g.addColorStop(0,"#fff");g.addColorStop(.25,"#7ffcff");g.addColorStop(1,"rgba(127,252,255,0)");
-    ctx.fillStyle=g;ctx.beginPath();ctx.arc(h.x,h.y,28,0,Math.PI*2);ctx.fill();
+    const g=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,30);
+    g.addColorStop(0,"#fff");g.addColorStop(.24,"#80f4ff");g.addColorStop(1,"rgba(128,244,255,0)");
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(h.x,h.y,30,0,Math.PI*2);ctx.fill();
   }
+
+  // 状態ラベルをキャラの頭上に大きく表示
+  const stateLabel=runnerAction==="BEAM"?"CROSS BEAM":runnerAction;
+  ctx.shadowBlur=10;
+  ctx.fillStyle=runnerAction==="RUN"?"#dff8ff":runnerAction==="JUMP"?"#ffe66d":runnerAction==="DUCK"?"#ffcf78":"#8fffff";
+  ctx.font="1000 24px system-ui";
+  ctx.textAlign="center";
+  ctx.fillText(stateLabel,hx,hy-hr-22);
 
   // クロスビーム
   if(performance.now()<runnerBeamUntil){
     const origin=aLH&&aRH?{x:(aLH.x+aRH.x)/2,y:(aLH.y+aRH.y)/2}:{x:baseX,y:baseY-90};
     const endY=innerHeight*.29;
 
-    ctx.strokeStyle="#9ffcff";
-    ctx.shadowColor="#56eaff";
-    ctx.shadowBlur=30;
-    ctx.lineWidth=16;
+    ctx.strokeStyle="#8ffcff";ctx.shadowColor="#4beaff";ctx.shadowBlur=34;ctx.lineWidth=18;
     ctx.beginPath();ctx.moveTo(origin.x,origin.y);ctx.lineTo(innerWidth/2,endY);ctx.stroke();
 
-    ctx.strokeStyle="#fff";
-    ctx.shadowBlur=10;
-    ctx.lineWidth=5;
+    ctx.strokeStyle="#fff";ctx.shadowBlur=10;ctx.lineWidth=5;
     ctx.beginPath();ctx.moveTo(origin.x,origin.y);ctx.lineTo(innerWidth/2,endY);ctx.stroke();
-
-    // ビーム先端
-    ctx.fillStyle="#dfffff";ctx.shadowBlur=35;
-    ctx.beginPath();ctx.arc(innerWidth/2,endY,18,0,Math.PI*2);ctx.fill();
   }
 
   ctx.restore();
