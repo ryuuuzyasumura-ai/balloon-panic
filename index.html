@@ -82,7 +82,7 @@ button:disabled{opacity:.5}
 </head>
 <body>
 <div id="app">
-  <div id="versionBadge">Ver. 0.7 FIX</div>
+  <div id="versionBadge">Ver. 0.8 STABLE</div>
   <div id="debugBox"></div>
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
@@ -118,7 +118,7 @@ button:disabled{opacity:.5}
   <div class="overlay" id="menuOverlay">
     <div class="card">
       <h2>MOTION ARCADE</h2>
-      <p>カメラを使って体を動かして遊ぶ体感ゲーム<br><span style="font-size:12px;opacity:.65">Ver. 0.7 FIX</span></p>
+      <p>カメラを使って体を動かして遊ぶ体感ゲーム<br><span style="font-size:12px;opacity:.65">Ver. 0.8 STABLE</span></p>
       <div class="modeGrid">
         <div class="modeCard balloon" id="balloonMode">
           <div class="modeIcon">🎈</div>
@@ -131,7 +131,7 @@ button:disabled{opacity:.5}
           <p>実物の発光ライトセーバーで<br>敵のレーザーを跳ね返せ！</p>
         </div>
       </div>
-      <p class="small" style="margin-top:22px">※ カメラ映像の処理はブラウザ内で行います。</p>
+      <p class="small" style="margin-top:22px">※ カメラ映像の処理はブラウザ内で行います。<br><span id="jsReady">APP READY ✓</span></p>
     </div>
   </div>
 
@@ -170,10 +170,7 @@ button:disabled{opacity:.5}
 </div>
 
 <script type="module">
-import { FilesetResolver, PoseLandmarker } from
-"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm";
-
-const APP_VERSION="0.7 FIX";
+const APP_VERSION="0.8 STABLE";
 const video=document.getElementById("video"),canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 const debugBox=document.getElementById("debugBox");
 document.getElementById("versionBadge").textContent="Ver. "+APP_VERSION;
@@ -187,6 +184,9 @@ cameraText=document.getElementById("cameraText"),swatchDot=document.getElementBy
 resultScore=document.getElementById("resultScore"),resultText=document.getElementById("resultText");
 
 let mode=null,stream=null,running=false,gameStarted=false,gameEnded=false,pose=null,lastVideoTime=-1;
+let FilesetResolverClass=null;
+let PoseLandmarkerClass=null;
+let mediaPipeModulePromise=null;
 let score=0,combo=0,startAt=0,duration=30,last=0,lastSpawn=0;
 let enemies=[],bolts=[],particles=[],balloons=[],hands=[];
 let saber={valid:false,x1:0,y1:0,x2:0,y2:0,confidence:0};
@@ -234,18 +234,27 @@ document.getElementById("menuBtn").onclick=()=>showMenu();
 document.getElementById("againBtn").onclick=()=>restartSameMode();
 
 function chooseMode(m){
- mode=m;menuOverlay.style.display="none";cameraOverlay.style.display="flex";
+ mode=m;
+ clearDebugError();
+ menuOverlay.style.display="none";
+ cameraOverlay.style.display="flex";
  errorEl.textContent="";
+ cameraBtn.disabled=false;
+ cameraBtn.style.display="";
  if(m==="balloon"){
+   cameraBtn.textContent="カメラを起動";
    cameraTitle.textContent="BALLOON PANIC";
    cameraText.innerHTML="カメラの前に立って、両手で風船を割ろう！";
  }else{
+   cameraBtn.textContent="カメラを起動";
    cameraTitle.textContent="LASER GUARD";
    cameraText.innerHTML="発光ライトセーバーを準備してください。<br>青色で始めるのがおすすめです。";
  }
 }
 
 document.getElementById("cameraBtn").onclick=async()=>{
+ cameraBtn.disabled=true;
+ errorEl.textContent="";
  try{
    if(!stream){
      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:1280},height:{ideal:720}},audio:false});
@@ -259,13 +268,32 @@ document.getElementById("cameraBtn").onclick=async()=>{
    }
    cameraOverlay.style.display="none";
    if(mode==="laser"){
+     cameraBtn.disabled=false;
      calOverlay.style.display="flex";
    }else{
-     await initPose();
-     startGame();
+     cameraOverlay.style.display="flex";
+     cameraTitle.textContent="LOADING...";
+     cameraText.innerHTML="人体認識AIを準備しています。<br>初回のみ数秒かかることがあります。";
+     try{
+       await initPose();
+       cameraOverlay.style.display="none";
+       cameraBtn.disabled=false;
+       startGame();
+     }catch(err){
+       console.error("MediaPipe load/init error",err);
+       cameraBtn.disabled=false;
+       cameraTitle.textContent="BALLOON PANIC";
+       cameraText.innerHTML="人体認識AIを読み込めませんでした。<br>通信状態を確認して、もう一度お試しください。";
+       errorEl.textContent=(err && err.message) ? err.message : "人体認識AIの読み込みに失敗しました。";
+       showDebugError(err,"MEDIAPIPE INIT");
+     }
    }
  }catch(e){
-   console.error(e);errorEl.textContent="カメラを起動できませんでした。Chromeのカメラ許可を確認してください。";
+   console.error(e);
+   cameraBtn.disabled=false;
+   cameraOverlay.style.display="flex";
+   errorEl.textContent="カメラを起動できませんでした。Chromeのカメラ許可を確認してください。";
+   showDebugError(e,"CAMERA START");
  }
 };
 
@@ -279,10 +307,23 @@ document.getElementById("calBtn").onclick=()=>{
 };
 document.getElementById("skipBtn").onclick=()=>{clearDebugError();calOverlay.style.display="none";startGame()};
 
+async function loadMediaPipe(){
+ if(FilesetResolverClass && PoseLandmarkerClass)return;
+
+ if(!mediaPipeModulePromise){
+   mediaPipeModulePromise=import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm");
+ }
+
+ const mod=await mediaPipeModulePromise;
+ FilesetResolverClass=mod.FilesetResolver;
+ PoseLandmarkerClass=mod.PoseLandmarker;
+}
+
 async function initPose(){
  if(pose)return;
  statusEl.textContent="人体認識AIを読み込み中…";
- const vision=await FilesetResolver.forVisionTasks(
+ await loadMediaPipe();
+ const vision=await FilesetResolverClass.forVisionTasks(
    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
  );
 
@@ -295,7 +336,7 @@ async function initPose(){
  };
 
  try{
-   pose=await PoseLandmarker.createFromOptions(vision,{
+   pose=await PoseLandmarkerClass.createFromOptions(vision,{
      baseOptions:{
        modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
        delegate:"GPU"
@@ -305,7 +346,7 @@ async function initPose(){
  }catch(err){
    console.warn("GPU初期化に失敗したためCPUで再試行します",err);
    statusEl.textContent="CPUモードで人体認識AIを読み込み中…";
-   pose=await PoseLandmarker.createFromOptions(vision,{
+   pose=await PoseLandmarkerClass.createFromOptions(vision,{
      baseOptions:{
        modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
      },
