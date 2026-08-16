@@ -117,6 +117,16 @@ button:disabled{opacity:.45;cursor:wait}
   font-weight:900;
   margin-top:4px;
 }
+
+#runnerFeedback{
+  position:absolute; inset:0; z-index:16; pointer-events:none;
+  opacity:0; transition:opacity .16s ease;
+}
+#runnerFeedbackText{
+  position:absolute; left:50%; top:52%; transform:translate(-50%,-50%);
+  font-size:clamp(56px,9vw,120px); font-weight:1000; letter-spacing:.04em;
+  text-shadow:0 0 28px rgba(0,0,0,.55);
+}
 </style>
 
 </head>
@@ -124,7 +134,7 @@ button:disabled{opacity:.45;cursor:wait}
 <div id="app">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
-  <div id="version">Ver. 2.2 ACTION GUIDE</div>
+  <div id="version">Ver. 2.3 CLEAR TIMING</div>
   <div id="debug"></div>
 
   <div id="hud">
@@ -163,6 +173,7 @@ button:disabled{opacity:.45;cursor:wait}
       <div class="main" id="actionCueMain"></div>
       <div class="sub" id="actionCueSub"></div>
     </div>
+    <div id="runnerFeedback"><div id="runnerFeedbackText"></div></div>
     <div id="countdown" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:min(18vw,180px);font-weight:1000;text-shadow:0 0 35px rgba(80,220,255,.9);display:none"></div>
   </div>
 
@@ -187,7 +198,7 @@ button:disabled{opacity:.45;cursor:wait}
           <p>ブロック世界を前進！<br>ジャンプ・しゃがみ・クロスビームで突破。</p>
         </div>
       </div>
-      <p class="small">APP READY ✓ / Ver. 2.2 ACTION GUIDE</p>
+      <p class="small">APP READY ✓ / Ver. 2.3 CLEAR TIMING</p>
     </div>
   </section>
 
@@ -260,7 +271,7 @@ button:disabled{opacity:.45;cursor:wait}
 (function(){
 "use strict";
 
-const VERSION="2.2 ACTION GUIDE";
+const VERSION="2.3 CLEAR TIMING";
 const $=id=>document.getElementById(id);
 const video=$("video"),canvas=$("game"),ctx=canvas.getContext("2d");
 const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen"),scanScreen=$("scanScreen"),playerScreen=$("playerScreen");
@@ -275,6 +286,7 @@ const scoreBox=$("scoreBox"),timeBox=$("timeBox"),p1Box=$("p1Box"),p2Box=$("p2Bo
 const p1ScoreEl=$("p1Score"),p2ScoreEl=$("p2Score"),runnerInfo=$("runnerInfo");
 const runnerLivesEl=$("runnerLives"),runnerActionEl=$("runnerAction");
 const actionCue=$("actionCue"),actionCueMain=$("actionCueMain"),actionCueSub=$("actionCueSub");
+const runnerFeedback=$("runnerFeedback"),runnerFeedbackText=$("runnerFeedbackText");
 
 let mode=null,stream=null,running=false,gameStarted=false,gameEnded=false;
 let score=0,combo=0,startAt=0,lastFrame=0,lastSpawn=0,duration=45;
@@ -301,6 +313,8 @@ let runnerLastObstacle=0;
 let runnerShake=0;
 let runnerCueType=null;
 let runnerCueUrgency=0;
+let runnerFeedbackTimer=null;
+let runnerActionLineY=0;
 let audioCtx=null;
 let pose=null,lastVideoTime=-1,lastPoseAt=0;
 let MP=null;
@@ -860,12 +874,25 @@ function spawnRunnerObject(){
   });
 }
 
+function showRunnerFeedback(kind,text){
+  if(runnerFeedbackTimer)clearTimeout(runnerFeedbackTimer);
+  const ok=kind==="success";
+  runnerFeedback.style.background=ok
+    ?"radial-gradient(circle at center,rgba(70,255,120,.38),rgba(0,120,40,.10),rgba(0,0,0,0) 72%)"
+    :"radial-gradient(circle at center,rgba(255,55,55,.48),rgba(140,0,0,.17),rgba(0,0,0,0) 72%)";
+  runnerFeedbackText.style.color=ok?"#9dffa5":"#ff7272";
+  runnerFeedbackText.textContent=text;
+  runnerFeedback.style.opacity="1";
+  runnerFeedbackTimer=setTimeout(()=>runnerFeedback.style.opacity="0",560);
+}
+
 function damageRunner(){
   runnerLives=Math.max(0,runnerLives-1);
   runnerLivesEl.textContent=runnerLives;
   runnerShake=12;
   tone(95,.16);setTimeout(()=>tone(65,.12),45);
-  addFloat(innerWidth/2,innerHeight*.64,"OUCH!","#ff6278");
+  addFloat(innerWidth/2,innerHeight*.64,"DAMAGE!","#ff6278");
+  showRunnerFeedback("damage","DAMAGE!");
   if(runnerLives<=0)finish();
 }
 
@@ -875,6 +902,7 @@ function clearRunnerObject(o,points,label){
   score+=points;runnerCleared++;
   scoreEl.textContent=Math.floor(score);
   addFloat(innerWidth/2,innerHeight*.55,label,"#ffe66d");
+  showRunnerFeedback("success",label.startsWith("BEAM")?"HIT!":"SAFE!");
   tone(520,.07);
 }
 
@@ -928,13 +956,13 @@ function updateRunner(now,dt){
 
       if(upcoming.type==="jump"){
         actionCueMain.textContent=runnerCueUrgency>.68?"JUMP NOW!":"JUMP";
-        actionCueSub.textContent=runnerCueUrgency>.68?"今ジャンプ！":"障害物が近づいています";
+        actionCueSub.textContent=runnerCueUrgency>.68?"ACTION LINE！ 今ジャンプ！":"線に来たらジャンプ";
       }else if(upcoming.type==="duck"){
         actionCueMain.textContent=runnerCueUrgency>.68?"DUCK NOW!":"DUCK";
-        actionCueSub.textContent=runnerCueUrgency>.68?"今しゃがむ！":"ゲートが近づいています";
+        actionCueSub.textContent=runnerCueUrgency>.68?"ACTION LINE！ 今しゃがむ！":"線に来たらしゃがむ";
       }else{
         actionCueMain.textContent=runnerCueUrgency>.55?"CROSS NOW!":"CROSS";
-        actionCueSub.textContent=runnerCueUrgency>.55?"両手を胸の前でクロス！":"敵が近づいています";
+        actionCueSub.textContent=runnerCueUrgency>.55?"ACTION LINE！ 両手をクロス！":"線に来たらクロス";
       }
 
       const hue=runnerCueUrgency>.68?8:48;
@@ -1060,6 +1088,45 @@ function drawRunnerWorld(now){
     }
   }
 
+  // 明確なアクションライン
+  runnerActionLineY=innerHeight*.72;
+  const urgency=runnerCueUrgency||0;
+
+  ctx.save();
+  ctx.shadowColor=urgency>.68?"#ff493d":"#ffe36a";
+  ctx.shadowBlur=22;
+  ctx.strokeStyle=urgency>.68?"#ff5a4f":"#ffe36a";
+  ctx.lineWidth=6;
+  ctx.setLineDash([18,12]);
+  ctx.beginPath();
+  ctx.moveTo(innerWidth*.24,runnerActionLineY);
+  ctx.lineTo(innerWidth*.76,runnerActionLineY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle=urgency>.68?"#ff5a4f":"#ffe36a";
+  ctx.beginPath();ctx.arc(innerWidth/2,runnerActionLineY,10,0,Math.PI*2);ctx.fill();
+
+  const labelW=240,labelH=38;
+  ctx.shadowBlur=0;
+  ctx.fillStyle="rgba(0,0,0,.72)";
+  ctx.strokeStyle=urgency>.68?"#ff7b70":"#ffe98b";
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.roundRect(innerWidth/2-labelW/2,runnerActionLineY-58,labelW,labelH,10);
+  ctx.fill();ctx.stroke();
+
+  ctx.fillStyle="#fff";
+  ctx.font="1000 18px system-ui";
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  ctx.fillText("ACTION LINE",innerWidth/2,runnerActionLineY-39);
+
+  ctx.font="900 14px system-ui";
+  ctx.fillStyle=urgency>.68?"#ffd4cf":"#fff2a8";
+  ctx.fillText("障害物がこの線に来たら動く！",innerWidth/2,runnerActionLineY+30);
+  ctx.restore();
+
   ctx.restore();
 }function drawRunnerObjects(){
   runnerObjects.slice().sort((a,b)=>b.z-a.z).forEach(o=>{
@@ -1068,6 +1135,19 @@ function drawRunnerWorld(now){
     const x=innerWidth/2;
     const s=55*p.scale;
     ctx.save();ctx.translate(x,p.y);
+
+    if(!o.resolved){
+      const d=Math.abs(p.y-runnerActionLineY);
+      if(d<95){
+        ctx.save();
+        ctx.globalAlpha=Math.max(.2,1-d/95);
+        ctx.strokeStyle=d<35?"#ff5b50":"#ffe36a";
+        ctx.lineWidth=4;
+        ctx.setLineDash([10,8]);
+        ctx.beginPath();ctx.moveTo(-s*1.7,0);ctx.lineTo(s*1.7,0);ctx.stroke();
+        ctx.restore();
+      }
+    }
 
     // アクションゾーン付近では障害物を強調
     if(o.z<.38&&!o.resolved){
