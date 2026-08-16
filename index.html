@@ -51,7 +51,7 @@ button:disabled{opacity:.45;cursor:wait}
 <div id="app">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
-  <div id="version">Ver. 1.1</div>
+  <div id="version">Ver. 1.2</div>
   <div id="debug"></div>
 
   <div id="hud">
@@ -59,11 +59,11 @@ button:disabled{opacity:.45;cursor:wait}
       <div class="label">SCORE</div>
       <div id="score" class="big">0</div>
       <div id="comboWrap" style="color:var(--gold);font-weight:900">COMBO × <span id="combo">0</span></div>
-      <div id="livesWrap" style="margin-top:5px;font-weight:900;color:#ff8090">SHIELD ♥ <span id="lives">3</span></div>
+      <div id="livesWrap" style="margin-top:5px;font-weight:900;color:#ff8090">SHIELD ♥ <span id="lives">5</span></div>
     </div>
     <div id="timeBox" class="hudbox">
       <div class="label">TIME</div>
-      <div class="big"><span id="time">30</span><span style="font-size:.42em"> 秒</span></div>
+      <div class="big"><span id="time">45</span><span style="font-size:.42em"> 秒</span></div>
     </div>
     <div id="titleHud"><h2 id="gameTitle"></h2><p id="gameSubtitle"></p></div>
     <div id="detectBox" class="hudbox">
@@ -92,7 +92,7 @@ button:disabled{opacity:.45;cursor:wait}
           <p>実物の発光ライトセーバーで<br>敵のレーザーを跳ね返せ！</p>
         </div>
       </div>
-      <p class="small">APP READY ✓ / Ver. 1.1</p>
+      <p class="small">APP READY ✓ / Ver. 1.2</p>
     </div>
   </section>
 
@@ -134,7 +134,7 @@ button:disabled{opacity:.45;cursor:wait}
 (function(){
 "use strict";
 
-const VERSION="1.1";
+const VERSION="1.2";
 const $=id=>document.getElementById(id);
 const video=$("video"),canvas=$("game"),ctx=canvas.getContext("2d");
 const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen");
@@ -146,14 +146,14 @@ const detText=$("detText"),confidenceEl=$("confidence"),cameraTitle=$("cameraTit
 const livesEl=$("lives"),livesWrap=$("livesWrap"),countdownEl=$("countdown");
 
 let mode=null,stream=null,running=false,gameStarted=false,gameEnded=false;
-let score=0,combo=0,startAt=0,lastFrame=0,lastSpawn=0,duration=30;
+let score=0,combo=0,startAt=0,lastFrame=0,lastSpawn=0,duration=45;
 let balloons=[],hands=[],bodyPoints=[],particles=[],enemies=[],bolts=[];
 let audioCtx=null;
 let pose=null,lastVideoTime=-1,lastPoseAt=0;
 let MP=null;
 let saber={valid:false,x1:0,y1:0,x2:0,y2:0,confidence:0};
 let targetHue=205,lastSaberAt=0;
-let lives=3,maxCombo=0,shotsDeflected=0,enemiesDestroyed=0;
+let lives=5,maxCombo=0,shotsDeflected=0,enemiesDestroyed=0;
 let countdownActive=false,countdownText="",countdownUntil=0;
 let floatingTexts=[];
 const small=document.createElement("canvas"); small.width=320; small.height=180;
@@ -281,7 +281,7 @@ function startCountdown(){
 
 function beginGame(){
   clearError();hud.style.display="block";
-  score=0;combo=0;lives=3;maxCombo=0;shotsDeflected=0;enemiesDestroyed=0;
+  score=0;combo=0;lives=5;maxCombo=0;shotsDeflected=0;enemiesDestroyed=0;
   scoreEl.textContent="0";comboEl.textContent="0";livesEl.textContent=lives;timeEl.textContent=duration;
   floatingTexts=[];
   balloons=[];particles=[];enemies=[];bolts=[];hands=[];bodyPoints=[];saberTrail=[];
@@ -452,8 +452,141 @@ function drawBg(){
 }
 function drawBalloon(b){ctx.save();ctx.translate(b.x,b.y);ctx.scale(b.scale,b.scale);ctx.shadowColor=b.color;ctx.shadowBlur=18;ctx.fillStyle=b.color;ctx.beginPath();ctx.ellipse(0,0,b.r*.78,b.r,0,0,Math.PI*2);ctx.fill();ctx.fillStyle="rgba(255,255,255,.45)";ctx.beginPath();ctx.ellipse(-b.r*.23,-b.r*.3,b.r*.13,b.r*.22,-.4,0,Math.PI*2);ctx.fill();if(b.pts>=30){ctx.fillStyle="#4b3900";ctx.font=`900 ${b.r*.5}px system-ui`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("★",0,0)}ctx.restore()}
 function drawBody(){
-  const by={};bodyPoints.forEach(p=>by[p.i]=p);ctx.save();ctx.lineCap="round";[[11,13],[13,15],[12,14],[14,16],[11,12]].forEach(([a,b])=>{if(by[a]&&by[b]){ctx.strokeStyle="rgba(90,225,255,.75)";ctx.shadowColor="#56ddff";ctx.shadowBlur=12;ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(by[a].x,by[a].y);ctx.lineTo(by[b].x,by[b].y);ctx.stroke()}});ctx.restore();
-  hands.forEach(h=>{const g=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,h.r);g.addColorStop(0,"#fff");g.addColorStop(.25,"rgba(87,220,255,.9)");g.addColorStop(1,"rgba(87,220,255,0)");ctx.fillStyle=g;ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill()});
+  const by={};
+  bodyPoints.forEach(p=>by[p.i]=p);
+
+  const LShoulder=by[11], RShoulder=by[12];
+  const LElbow=by[13], RElbow=by[14];
+  const LHand=by[15], RHand=by[16];
+
+  ctx.save();
+  ctx.lineCap="round";
+  ctx.lineJoin="round";
+
+  // 腕：太めの発光ライン
+  const drawLimb=(a,b,width=22)=>{
+    if(!a||!b)return;
+    ctx.strokeStyle="rgba(80,220,255,.80)";
+    ctx.shadowColor="#56ddff";
+    ctx.shadowBlur=18;
+    ctx.lineWidth=width;
+    ctx.beginPath();
+    ctx.moveTo(a.x,a.y);
+    ctx.lineTo(b.x,b.y);
+    ctx.stroke();
+
+    ctx.strokeStyle="rgba(220,250,255,.85)";
+    ctx.shadowBlur=5;
+    ctx.lineWidth=Math.max(6,width*.28);
+    ctx.beginPath();
+    ctx.moveTo(a.x,a.y);
+    ctx.lineTo(b.x,b.y);
+    ctx.stroke();
+  };
+
+  drawLimb(LShoulder,LElbow,24);
+  drawLimb(LElbow,LHand,22);
+  drawLimb(RShoulder,RElbow,24);
+  drawLimb(RElbow,RHand,22);
+
+  // 胴体：肩の位置から簡易シルエット
+  if(LShoulder&&RShoulder){
+    const shoulderMid={
+      x:(LShoulder.x+RShoulder.x)/2,
+      y:(LShoulder.y+RShoulder.y)/2
+    };
+    const shoulderWidth=Math.max(70,Math.hypot(LShoulder.x-RShoulder.x,LShoulder.y-RShoulder.y));
+    const torsoH=Math.min(220,Math.max(130,shoulderWidth*1.35));
+
+    const leftWaist={x:shoulderMid.x-shoulderWidth*.30,y:shoulderMid.y+torsoH};
+    const rightWaist={x:shoulderMid.x+shoulderWidth*.30,y:shoulderMid.y+torsoH};
+
+    // 胴体外側
+    ctx.shadowColor="#36d9ff";
+    ctx.shadowBlur=24;
+    ctx.fillStyle="rgba(22,110,155,.36)";
+    ctx.strokeStyle="rgba(105,235,255,.88)";
+    ctx.lineWidth=5;
+
+    ctx.beginPath();
+    ctx.moveTo(LShoulder.x,LShoulder.y);
+    ctx.quadraticCurveTo(
+      shoulderMid.x-shoulderWidth*.36,
+      shoulderMid.y+torsoH*.52,
+      leftWaist.x,leftWaist.y
+    );
+    ctx.lineTo(rightWaist.x,rightWaist.y);
+    ctx.quadraticCurveTo(
+      shoulderMid.x+shoulderWidth*.36,
+      shoulderMid.y+torsoH*.52,
+      RShoulder.x,RShoulder.y
+    );
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 胸部の発光ライン
+    ctx.shadowBlur=8;
+    ctx.strokeStyle="rgba(185,248,255,.65)";
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(LShoulder.x,LShoulder.y);
+    ctx.lineTo(RShoulder.x,RShoulder.y);
+    ctx.stroke();
+
+    // 頭
+    const headR=Math.min(56,Math.max(34,shoulderWidth*.28));
+    const headY=shoulderMid.y-headR*1.5;
+
+    ctx.shadowColor="#4de6ff";
+    ctx.shadowBlur=22;
+    ctx.fillStyle="rgba(25,125,170,.42)";
+    ctx.strokeStyle="rgba(135,245,255,.92)";
+    ctx.lineWidth=5;
+    ctx.beginPath();
+    ctx.arc(shoulderMid.x,headY,headR,0,Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 顔の方向がわかる程度の簡易フェイス
+    ctx.shadowBlur=0;
+    ctx.fillStyle="rgba(225,255,255,.9)";
+    ctx.beginPath();
+    ctx.arc(shoulderMid.x-headR*.32,headY-headR*.05,4.5,0,Math.PI*2);
+    ctx.arc(shoulderMid.x+headR*.32,headY-headR*.05,4.5,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle="rgba(225,255,255,.65)";
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(shoulderMid.x,headY+headR*.12,headR*.28,.1*Math.PI,.9*Math.PI);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // 手はゲーム上重要なので大きめに強調
+  hands.forEach(h=>{
+    const g=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,h.r);
+    g.addColorStop(0,"rgba(255,255,255,1)");
+    g.addColorStop(.22,"rgba(87,220,255,.95)");
+    g.addColorStop(.55,"rgba(87,220,255,.32)");
+    g.addColorStop(1,"rgba(87,220,255,0)");
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.arc(h.x,h.y,h.r,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.save();
+    ctx.strokeStyle="rgba(255,255,255,.92)";
+    ctx.shadowColor="#56ddff";
+    ctx.shadowBlur=14;
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(h.x,h.y,20,0,Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  });
 }
 function drawEnemy(e){
   ctx.save();ctx.translate(e.x,e.y);
