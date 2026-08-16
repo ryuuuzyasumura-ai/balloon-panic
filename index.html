@@ -45,10 +45,45 @@ button:disabled{opacity:.5}
 .dot{width:18px;height:18px;border-radius:50%;background:#5fe6ff}
 #cameraOverlay,#calOverlay,#resultOverlay{display:none}
 @media(max-width:760px){.modeGrid{grid-template-columns:1fr}.modeCard{min-height:210px}.centerTitle{top:100px;width:80vw}.box{min-width:150px}}
+
+#versionBadge{
+  position:absolute;
+  right:18px;
+  top:104px;
+  z-index:30;
+  padding:6px 10px;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(0,0,0,.55);
+  color:#bfefff;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.08em;
+  border-radius:8px;
+  pointer-events:none;
+}
+#debugBox{
+  position:absolute;
+  left:50%;
+  bottom:72px;
+  transform:translateX(-50%);
+  z-index:40;
+  width:min(900px,92vw);
+  padding:10px 14px;
+  background:rgba(90,0,0,.86);
+  border:1px solid rgba(255,130,130,.8);
+  color:#fff;
+  font:700 13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;
+  white-space:pre-wrap;
+  display:none;
+  pointer-events:none;
+}
 </style>
+
 </head>
 <body>
 <div id="app">
+  <div id="versionBadge">Ver. 0.6 DEBUG</div>
+  <div id="debugBox"></div>
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
 
@@ -83,7 +118,7 @@ button:disabled{opacity:.5}
   <div class="overlay" id="menuOverlay">
     <div class="card">
       <h2>MOTION ARCADE</h2>
-      <p>カメラを使って体を動かして遊ぶ体感ゲーム</p>
+      <p>カメラを使って体を動かして遊ぶ体感ゲーム<br><span style="font-size:12px;opacity:.65">Ver. 0.6 DEBUG</span></p>
       <div class="modeGrid">
         <div class="modeCard balloon" id="balloonMode">
           <div class="modeIcon">🎈</div>
@@ -138,7 +173,10 @@ button:disabled{opacity:.5}
 import { FilesetResolver, PoseLandmarker } from
 "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm";
 
+const APP_VERSION="0.6 DEBUG";
 const video=document.getElementById("video"),canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+const debugBox=document.getElementById("debugBox");
+document.getElementById("versionBadge").textContent="Ver. "+APP_VERSION;
 const hud=document.getElementById("hud"),menuOverlay=document.getElementById("menuOverlay"),cameraOverlay=document.getElementById("cameraOverlay"),
 calOverlay=document.getElementById("calOverlay"),resultOverlay=document.getElementById("resultOverlay");
 const scoreEl=document.getElementById("score"),comboEl=document.getElementById("combo"),comboWrap=document.getElementById("comboWrap"),
@@ -160,6 +198,26 @@ let lastSaberDetectAt=0;
 const POSE_INTERVAL=66;   // 約15fps
 const SABER_INTERVAL=50;  // 約20fps
 let runtimeErrorCount=0;
+let lastRuntimeError="";
+let lastRuntimeStack="";
+
+function showDebugError(err, where="GAME LOOP"){
+  const msg = err && err.message ? err.message : String(err);
+  const name = err && err.name ? err.name : "Error";
+  const stack = err && err.stack ? String(err.stack).split("\n").slice(0,4).join("\n") : "";
+  lastRuntimeError=`${where}: ${name}: ${msg}`;
+  lastRuntimeStack=stack;
+  debugBox.style.display="block";
+  debugBox.textContent=`Ver. ${APP_VERSION}\n${lastRuntimeError}${stack ? "\n"+stack : ""}`;
+}
+
+function clearDebugError(){
+  runtimeErrorCount=0;
+  lastRuntimeError="";
+  lastRuntimeStack="";
+  debugBox.style.display="none";
+  debugBox.textContent="";
+}
 
 function resize(){
  const dpr=Math.min(devicePixelRatio||1,2);
@@ -257,6 +315,7 @@ async function initPose(){
 }
 
 function startGame(){
+ clearDebugError();
  hud.style.display="block";resultOverlay.style.display="none";
  score=0;combo=0;scoreEl.textContent="0";comboEl.textContent="0";timeEl.textContent=duration;
  enemies=[];bolts=[];particles=[];balloons=[];hands=[];
@@ -277,6 +336,7 @@ function restartSameMode(){
 }
 
 function showMenu(){
+ clearDebugError();
  gameStarted=false;gameEnded=false;hud.style.display="none";resultOverlay.style.display="none";cameraOverlay.style.display="none";calOverlay.style.display="none";menuOverlay.style.display="flex";
 }
 
@@ -558,12 +618,38 @@ function updateLaser(now,dt){
 }
 
 function update(now,dt){
- if(mode==="balloon"){if(pose)updatePose(now)}else if(mode==="laser")detectSaber(now);
+ try{
+   if(mode==="balloon"){
+     if(pose)updatePose(now);
+   }else if(mode==="laser"){
+     detectSaber(now);
+   }
+ }catch(err){
+   showDebugError(err, mode==="laser" ? "SABER DETECTION" : "POSE DETECTION");
+   throw err;
+ }
+
  if(!gameStarted||gameEnded)return;
- const elapsed=(now-startAt)/1000,rem=Math.max(0,Math.ceil(duration-elapsed));timeEl.textContent=rem;
+
+ const elapsed=(now-startAt)/1000;
+ const rem=Math.max(0,Math.ceil(duration-elapsed));
+ timeEl.textContent=rem;
  if(elapsed>=duration){endGame();return}
- if(mode==="balloon")updateBalloon(now,dt);else updateLaser(now,dt);
- for(const p of particles){p.age+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=270*dt}
+
+ try{
+   if(mode==="balloon")updateBalloon(now,dt);
+   else updateLaser(now,dt);
+ }catch(err){
+   showDebugError(err, mode==="laser" ? "LASER GAME LOGIC" : "BALLOON GAME LOGIC");
+   throw err;
+ }
+
+ for(const p of particles){
+   p.age+=dt;
+   p.x+=p.vx*dt;
+   p.y+=p.vy*dt;
+   p.vy+=270*dt
+ }
  particles=particles.filter(p=>p.age<p.life)
 }
 
@@ -728,16 +814,17 @@ function loop(now){
    }
 
    drawParticles();
-   runtimeErrorCount=0;
+
+   // 直前までエラーだったが復旧したら、数フレーム後に表示を消す
+   if(runtimeErrorCount>0){
+     runtimeErrorCount=Math.max(0,runtimeErrorCount-1);
+     if(runtimeErrorCount===0)clearDebugError();
+   }
  }catch(err){
    runtimeErrorCount++;
    console.error("Game loop error:",err);
-   statusEl.textContent="処理を自動復旧中…";
-
-   // 一時的な解析エラーならゲーム全体は止めない
-   if(runtimeErrorCount>20){
-     statusEl.textContent="処理が重くなっています。モード選択から再開してください";
-   }
+   if(!lastRuntimeError)showDebugError(err,"GAME LOOP");
+   statusEl.textContent=`エラー検出中… (${runtimeErrorCount})`;
  }
 
  requestAnimationFrame(loop);
