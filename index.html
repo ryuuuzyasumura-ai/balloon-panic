@@ -154,6 +154,13 @@ let enemies=[],bolts=[],particles=[],balloons=[],hands=[];
 let saber={valid:false,x1:0,y1:0,x2:0,y2:0,confidence:0};
 let audioCtx=null,targetHue=205,hueTolerance=28,minSat=.38,minVal=.42;
 
+// カメラ解析と描画を分離してフリーズを防ぐ
+let lastPoseDetectAt=0;
+let lastSaberDetectAt=0;
+const POSE_INTERVAL=66;   // 約15fps
+const SABER_INTERVAL=50;  // 約20fps
+let runtimeErrorCount=0;
+
 function resize(){
  const dpr=Math.min(devicePixelRatio||1,2);
  canvas.width=innerWidth*dpr;canvas.height=innerHeight*dpr;
@@ -187,7 +194,11 @@ document.getElementById("cameraBtn").onclick=async()=>{
      video.srcObject=stream;await video.play();
      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
    }
-   if(!running){running=true;requestAnimationFrame(loop)}
+   if(!running){
+     running=true;
+     last=0;
+     requestAnimationFrame(loop);
+   }
    cameraOverlay.style.display="none";
    if(mode==="laser"){
      calOverlay.style.display="flex";
@@ -212,18 +223,44 @@ document.getElementById("skipBtn").onclick=()=>{calOverlay.style.display="none";
 async function initPose(){
  if(pose)return;
  statusEl.textContent="人体認識AIを読み込み中…";
- const vision=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
- pose=await PoseLandmarker.createFromOptions(vision,{
-   baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",delegate:"GPU"},
-   runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5
- });
+ const vision=await FilesetResolver.forVisionTasks(
+   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+ );
+
+ const common={
+   runningMode:"VIDEO",
+   numPoses:1,
+   minPoseDetectionConfidence:.45,
+   minPosePresenceConfidence:.45,
+   minTrackingConfidence:.45
+ };
+
+ try{
+   pose=await PoseLandmarker.createFromOptions(vision,{
+     baseOptions:{
+       modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
+       delegate:"GPU"
+     },
+     ...common
+   });
+ }catch(err){
+   console.warn("GPU初期化に失敗したためCPUで再試行します",err);
+   statusEl.textContent="CPUモードで人体認識AIを読み込み中…";
+   pose=await PoseLandmarker.createFromOptions(vision,{
+     baseOptions:{
+       modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
+     },
+     ...common
+   });
+ }
+ statusEl.textContent="人体認識AI 準備完了";
 }
 
 function startGame(){
  hud.style.display="block";resultOverlay.style.display="none";
  score=0;combo=0;scoreEl.textContent="0";comboEl.textContent="0";timeEl.textContent=duration;
  enemies=[];bolts=[];particles=[];balloons=[];hands=[];
- startAt=performance.now();lastSpawn=0;gameStarted=true;gameEnded=false;
+ startAt=performance.now();lastSpawn=0;lastPoseDetectAt=0;lastSaberDetectAt=0;last=0;gameStarted=true;gameEnded=false;
  if(mode==="balloon"){
    gameTitle.textContent="BALLOON PANIC";gameSubtitle.textContent="両手で風船を割ろう！";
    comboWrap.style.display="none";detect.style.display="none";statusEl.textContent="手で風船を割ろう！";
@@ -249,6 +286,9 @@ let smoothedHands=[null,null];
 function lerp(a,b,t){return a+(b-a)*t}
 
 function updatePose(now){
+ if(now-lastPoseDetectAt<POSE_INTERVAL)return;
+ lastPoseDetectAt=now;
+
  hands=[];bodyPoints=[];
  if(!pose||video.readyState<2||video.currentTime===lastVideoTime)return;
  lastVideoTime=video.currentTime;
@@ -518,7 +558,7 @@ function updateLaser(now,dt){
 }
 
 function update(now,dt){
- if(mode==="balloon"){if(pose)updatePose(now)}else if(mode==="laser")detectSaber();
+ if(mode==="balloon"){if(pose)updatePose(now)}else if(mode==="laser")detectSaber(now);
  if(!gameStarted||gameEnded)return;
  const elapsed=(now-startAt)/1000,rem=Math.max(0,Math.ceil(duration-elapsed));timeEl.textContent=rem;
  if(elapsed>=duration){endGame();return}
@@ -669,9 +709,38 @@ function drawSaber(){
 function drawParticles(){for(const p of particles){ctx.globalAlpha=1-p.age/p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1}
 
 function loop(now){
- if(!running)return;const dt=Math.min(.033,last?(now-last)/1000:.016);last=now;update(now,dt);drawBg();
- if(mode==="balloon"){balloons.forEach(drawBalloon);drawHands()}else if(mode==="laser"){enemies.forEach(drawEnemy);bolts.forEach(drawBolt);drawSaber()}
- drawParticles();requestAnimationFrame(loop)
+ if(!running)return;
+
+ try{
+   const dt=Math.min(.033,last?(now-last)/1000:.016);
+   last=now;
+
+   update(now,dt);
+   drawBg();
+
+   if(mode==="balloon"){
+     balloons.forEach(drawBalloon);
+     drawHands();
+   }else if(mode==="laser"){
+     enemies.forEach(drawEnemy);
+     bolts.forEach(drawBolt);
+     drawSaber();
+   }
+
+   drawParticles();
+   runtimeErrorCount=0;
+ }catch(err){
+   runtimeErrorCount++;
+   console.error("Game loop error:",err);
+   statusEl.textContent="処理を自動復旧中…";
+
+   // 一時的な解析エラーならゲーム全体は止めない
+   if(runtimeErrorCount>20){
+     statusEl.textContent="処理が重くなっています。モード選択から再開してください";
+   }
+ }
+
+ requestAnimationFrame(loop);
 }
 
 function endGame(){
