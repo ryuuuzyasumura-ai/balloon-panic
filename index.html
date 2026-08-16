@@ -102,7 +102,7 @@ button:disabled{opacity:.45;cursor:wait}
 <div id="app">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
-  <div id="version">Ver. 2.0 DUO + BLOCK RUN</div>
+  <div id="version">Ver. 2.1 BODY SYNC + CROSS BEAM</div>
   <div id="debug"></div>
 
   <div id="hud">
@@ -158,10 +158,10 @@ button:disabled{opacity:.45;cursor:wait}
         <div id="chooseRunner" class="mode">
           <div class="icon">🧱</div>
           <h3>BLOCK RUN</h3>
-          <p>ブロック世界を前進！<br>ジャンプ・しゃがみ・パンチで突破。</p>
+          <p>ブロック世界を前進！<br>ジャンプ・しゃがみ・クロスビームで突破。</p>
         </div>
       </div>
-      <p class="small">APP READY ✓ / Ver. 2.0 DUO + BLOCK RUN</p>
+      <p class="small">APP READY ✓ / Ver. 2.1 BODY SYNC + CROSS BEAM</p>
     </div>
   </section>
 
@@ -234,7 +234,7 @@ button:disabled{opacity:.45;cursor:wait}
 (function(){
 "use strict";
 
-const VERSION="2.0 DUO + BLOCK RUN";
+const VERSION="2.1 BODY SYNC + CROSS BEAM";
 const $=id=>document.getElementById(id);
 const video=$("video"),canvas=$("game"),ctx=canvas.getContext("2d");
 const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen"),scanScreen=$("scanScreen"),playerScreen=$("playerScreen");
@@ -264,7 +264,9 @@ let runnerObjects=[];
 let runnerLives=3;
 let runnerBaseline=null;
 let runnerAction="RUN";
-let runnerPunchUntil=0;
+let runnerBeamUntil=0;
+let runnerBeamCooldownUntil=0;
+let runnerCrossHold=0;
 let runnerPrevWrists=[null,null];
 let runnerDistance=0;
 let runnerCleared=0;
@@ -414,7 +416,7 @@ function selectMode(m){
     cameraText.innerHTML="発光ライトセーバーを準備してください。<br>青色で始めるのがおすすめです。";
   }else{
     cameraTitle.textContent="BLOCK RUN";
-    cameraText.innerHTML="全身が映る位置に立ってください。<br><span class='runnerKey'>JUMP</span> ジャンプ　<span class='runnerKey'>DUCK</span> しゃがむ　<span class='runnerKey'>PUNCH</span> パンチ";
+    cameraText.innerHTML="全身が映る位置に立ってください。<br><span class='runnerKey'>JUMP</span> ジャンプ　<span class='runnerKey'>DUCK</span> しゃがむ　<span class='runnerKey'>CROSS</span> 両手をクロスしてビーム";
   }
   cameraError.textContent="";
   cameraBtn.disabled=false;
@@ -504,7 +506,7 @@ function beginGame(){
   scoreEl.textContent="0";comboEl.textContent="0";livesEl.textContent=lives;timeEl.textContent=duration;
   balloonScores=[0,0];p1ScoreEl.textContent="0";p2ScoreEl.textContent="0";
   runnerObjects=[];runnerLives=3;runnerLivesEl.textContent="3";runnerBaseline=null;runnerAction="RUN";
-  runnerPunchUntil=0;runnerPrevWrists=[null,null];runnerDistance=0;runnerCleared=0;runnerLastObstacle=0;runnerShake=0;
+  runnerBeamUntil=0;runnerBeamCooldownUntil=0;runnerCrossHold=0;runnerPrevWrists=[null,null];runnerDistance=0;runnerCleared=0;runnerLastObstacle=0;runnerShake=0;
   floatingTexts=[];
   balloons=[];particles=[];enemies=[];bolts=[];hands=[];bodyPoints=[];saberTrail=[];
   startAt=performance.now();lastSpawn=0;gameStarted=true;gameEnded=false;
@@ -529,9 +531,9 @@ function beginGame(){
   }else{
     scoreBox.style.display="block";p1Box.style.display="none";p2Box.style.display="none";
     timeBox.style.left="auto";timeBox.style.right="18px";timeBox.style.transform="";
-    gameTitle.textContent="BLOCK RUN";gameSubtitle.textContent="ジャンプ・しゃがみ・パンチで突破！";
+    gameTitle.textContent="BLOCK RUN";gameSubtitle.textContent="ジャンプ・しゃがみ・クロスビームで突破！";
     comboWrap.style.display="none";livesWrap.style.display="none";detectBox.style.display="none";runnerInfo.style.display="block";
-    statusEl.textContent="まず普通に立って姿勢を読み込みます…";
+    statusEl.textContent="普通に立って姿勢を読み込みます…";
   }
 }
 function goMenu(){gameStarted=false;hud.style.display="none";showScreen(menu);clearError()}
@@ -647,25 +649,47 @@ function updatePose(now){
       action="DUCK";
     }
 
-    // パンチ：手首の高速移動を検出
-    p.hands.forEach((h,k)=>{
-      const prev=runnerPrevWrists[k];
-      if(prev){
-        const dt=Math.max(.04,(nowMs-prev.t)/1000);
-        const speed=Math.hypot(h.x-prev.x,h.y-prev.y)/dt;
-        if(speed>900 && h.y < p.hipY+30){
-          runnerPunchUntil=nowMs+280;
-        }
-      }
-      runnerPrevWrists[k]={x:h.x,y:h.y,t:nowMs};
-    });
+    // 両手クロス判定：
+    // 左右の手が胸の前で近づき、肩幅の中央付近に集まった状態を少し維持するとビーム。
+    const lh=p.hands[0], rh=p.hands[1];
+    const bodyCenterX=p.centerX;
+    const shoulderSpan=Math.max(90,Math.abs((1-p.landmarks[11].x)-(1-p.landmarks[12].x))*innerWidth);
+    let crossed=false;
 
-    if(action==="RUN" && nowMs<runnerPunchUntil)action="PUNCH";
+    if(lh&&rh){
+      const handDist=Math.hypot(lh.x-rh.x,lh.y-rh.y);
+      const avgX=(lh.x+rh.x)/2;
+      const avgY=(lh.y+rh.y)/2;
+      const chestTop=p.shoulderY-20;
+      const chestBottom=p.hipY-15;
+
+      crossed=
+        handDist < shoulderSpan*.70 &&
+        Math.abs(avgX-bodyCenterX) < shoulderSpan*.48 &&
+        avgY > chestTop &&
+        avgY < chestBottom;
+    }
+
+    if(crossed){
+      runnerCrossHold+=66;
+      if(runnerCrossHold>=180 && nowMs>runnerBeamCooldownUntil){
+        runnerBeamUntil=nowMs+420;
+        runnerBeamCooldownUntil=nowMs+850;
+        runnerCrossHold=0;
+        tone(900,.08);
+        setTimeout(()=>tone(1260,.10),55);
+        addFloat(innerWidth/2,innerHeight*.48,"CROSS BEAM!","#7ffcff");
+      }
+    }else{
+      runnerCrossHold=Math.max(0,runnerCrossHold-90);
+    }
+
+    if(action==="RUN" && nowMs<runnerBeamUntil)action="BEAM";
     runnerAction=action;
-    runnerActionEl.textContent=action;
+    runnerActionEl.textContent=action==="BEAM"?"CROSS BEAM":action;
 
     // 通常姿勢中だけベース位置をゆっくり追従
-    if(action==="RUN" && nowMs>runnerPunchUntil){
+    if(action==="RUN" && nowMs>runnerBeamUntil){
       runnerBaseline.shoulderY+=(p.shoulderY-runnerBaseline.shoulderY)*.012;
       runnerBaseline.hipY+=(p.hipY-runnerBaseline.hipY)*.012;
     }
@@ -839,9 +863,9 @@ function updateRunner(now,dt){
   runnerObjects.forEach(o=>{
     o.z-=dt*(.30+Math.min(.13,runnerDistance*.001));
 
-    if(o.type==="enemy"&&!o.resolved&&o.z<.34&&nowMs<runnerPunchUntil){
-      clearRunnerObject(o,160,"PUNCH! +160");
-      burst(innerWidth/2,innerHeight*.55,"#8cff8c",24);
+    if(o.type==="enemy"&&!o.resolved&&o.z<.72&&nowMs<runnerBeamUntil){
+      clearRunnerObject(o,180,"BEAM! +180");
+      burst(innerWidth/2,innerHeight*.46,"#7ffcff",30);
     }
 
     if(!o.resolved&&o.z<.12){
@@ -876,58 +900,101 @@ function drawRunnerWorld(now){
   const sx=(Math.random()-.5)*runnerShake,sy=(Math.random()-.5)*runnerShake;
   ctx.translate(sx,sy);
 
-  // 空
-  ctx.fillStyle="#79c9ee";ctx.fillRect(-20,-20,innerWidth+40,innerHeight+40);
+  // 空：より奥行きのあるグラデーション
+  const sky=ctx.createLinearGradient(0,0,0,innerHeight*.58);
+  sky.addColorStop(0,"#5da8d9");
+  sky.addColorStop(.55,"#9bd2ec");
+  sky.addColorStop(1,"#dcecf2");
+  ctx.fillStyle=sky;
+  ctx.fillRect(-20,-20,innerWidth+40,innerHeight+40);
 
-  // 四角い雲
-  ctx.fillStyle="rgba(255,255,255,.82)";
-  const cloudShift=(runnerDistance*8)%innerWidth;
-  for(let i=-1;i<4;i++){
-    const x=i*innerWidth*.38-cloudShift*.15;
-    const y=70+(i%2)*55;
-    ctx.fillRect(x,y,120,34);ctx.fillRect(x+30,y-22,70,22);
-  }
+  const horizon=innerHeight*.31;
 
-  const horizon=innerHeight*.28;
-  // 草地
-  ctx.fillStyle="#4c9b48";ctx.fillRect(0,horizon,innerWidth,innerHeight-horizon);
-
-  // 道（台形）
-  ctx.fillStyle="#8a7657";
+  // 遠景の山
+  ctx.fillStyle="rgba(83,108,113,.45)";
   ctx.beginPath();
-  ctx.moveTo(innerWidth*.46,horizon);
-  ctx.lineTo(innerWidth*.54,horizon);
-  ctx.lineTo(innerWidth*.78,innerHeight);
-  ctx.lineTo(innerWidth*.22,innerHeight);
-  ctx.closePath();ctx.fill();
+  ctx.moveTo(0,horizon);
+  for(let i=0;i<=8;i++){
+    const x=i*innerWidth/8;
+    const y=horizon-(30+Math.sin(i*1.7)*28);
+    ctx.lineTo(x,y);
+  }
+  ctx.lineTo(innerWidth,horizon);
+  ctx.closePath();
+  ctx.fill();
 
-  // ブロック状の道グリッド
-  const phase=(runnerDistance*.18)%1;
-  for(let i=0;i<11;i++){
-    const z=(i/10+phase)%1;
+  // 地面
+  const ground=ctx.createLinearGradient(0,horizon,0,innerHeight);
+  ground.addColorStop(0,"#6ea05d");
+  ground.addColorStop(1,"#315b35");
+  ctx.fillStyle=ground;
+  ctx.fillRect(0,horizon,innerWidth,innerHeight-horizon);
+
+  // 道
+  const road=ctx.createLinearGradient(0,horizon,0,innerHeight);
+  road.addColorStop(0,"#8f8372");
+  road.addColorStop(1,"#51473e");
+  ctx.fillStyle=road;
+  ctx.beginPath();
+  ctx.moveTo(innerWidth*.465,horizon);
+  ctx.lineTo(innerWidth*.535,horizon);
+  ctx.lineTo(innerWidth*.79,innerHeight);
+  ctx.lineTo(innerWidth*.21,innerHeight);
+  ctx.closePath();
+  ctx.fill();
+
+  // 道の縁
+  ctx.strokeStyle="rgba(225,205,172,.55)";
+  ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(innerWidth*.465,horizon);ctx.lineTo(innerWidth*.21,innerHeight);
+  ctx.moveTo(innerWidth*.535,horizon);ctx.lineTo(innerWidth*.79,innerHeight);
+  ctx.stroke();
+
+  // 道のグリッドで速度感
+  const phase=(runnerDistance*.20)%1;
+  for(let i=0;i<12;i++){
+    const z=(i/11+phase)%1;
     const p=runnerPerspective(1-z);
-    const half=innerWidth*(.04+p.t*.25);
-    ctx.strokeStyle="rgba(70,55,40,.35)";
-    ctx.lineWidth=Math.max(1,p.scale*2);
+    const half=innerWidth*(.035+p.t*.255);
+    ctx.strokeStyle=`rgba(220,210,190,${.10+p.t*.24})`;
+    ctx.lineWidth=Math.max(1,p.scale*1.7);
     ctx.beginPath();ctx.moveTo(innerWidth/2-half,p.y);ctx.lineTo(innerWidth/2+half,p.y);ctx.stroke();
   }
 
-  // 左右のボクセル木
-  for(let side of [-1,1]){
-    for(let i=0;i<5;i++){
-      const z=((i/5+phase*.35)%1);
+  // 道路中央の流れるライン
+  for(let i=0;i<7;i++){
+    const z=((i/7+phase*.65)%1);
+    const p=runnerPerspective(1-z);
+    const w=4+p.t*18,h=6+p.t*55;
+    ctx.fillStyle=`rgba(245,238,215,${.18+p.t*.35})`;
+    ctx.fillRect(innerWidth/2-w/2,p.y-h/2,w,h);
+  }
+
+  // 木と岩を左右に配置
+  for(const side of [-1,1]){
+    for(let i=0;i<6;i++){
+      const z=((i/6+phase*.38)%1);
       const p=runnerPerspective(1-z);
-      const x=innerWidth/2+side*(innerWidth*(.12+p.t*.35));
-      const s=18*p.scale;
-      ctx.fillStyle="#704b2e";ctx.fillRect(x-s*.25,p.y-s*1.7,s*.5,s*1.7);
-      ctx.fillStyle="#2f7e3b";ctx.fillRect(x-s,p.y-s*2.7,s*2,s*1.45);
+      const x=innerWidth/2+side*(innerWidth*(.12+p.t*.38));
+      const s=17*p.scale;
+
+      // 影
+      ctx.fillStyle="rgba(0,0,0,.18)";
+      ctx.beginPath();ctx.ellipse(x,p.y,s*1.2,s*.28,0,0,Math.PI*2);ctx.fill();
+
+      // 木
+      ctx.fillStyle="#66513b";
+      ctx.fillRect(x-s*.23,p.y-s*1.7,s*.46,s*1.7);
+      ctx.fillStyle="#376946";
+      ctx.beginPath();
+      ctx.arc(x,p.y-s*2.15,s*.92,0,Math.PI*2);
+      ctx.fill();
     }
   }
 
   ctx.restore();
-}
-
-function drawRunnerObjects(){
+}function drawRunnerObjects(){
   runnerObjects.slice().sort((a,b)=>b.z-a.z).forEach(o=>{
     if(o.resolved&&o.type==="enemy")return;
     const p=runnerPerspective(o.z);
@@ -952,15 +1019,17 @@ function drawRunnerObjects(){
       ctx.fillStyle="#fff";ctx.font=`900 ${Math.max(12,16*p.scale)}px system-ui`;ctx.textAlign="center";
       ctx.fillText("DUCK",0,-s*2.2);
     }else{
-      // オリジナルのブロックモンスター
-      ctx.fillStyle=o.resolved?"#6a6a6a":"#4a9e52";
-      ctx.strokeStyle="#214725";ctx.lineWidth=Math.max(2,4*p.scale);
+      // オリジナルのブロックドローン
+      ctx.fillStyle=o.resolved?"#6a6a6a":"#3d5968";
+      ctx.strokeStyle="#91e6ff";ctx.lineWidth=Math.max(2,4*p.scale);
       ctx.fillRect(-s*.75,-s*1.45,s*1.5,s*1.45);ctx.strokeRect(-s*.75,-s*1.45,s*1.5,s*1.45);
-      ctx.fillStyle="#152518";
+      ctx.fillStyle="#9ff7ff";
+      ctx.shadowColor="#7ffcff";ctx.shadowBlur=12;
       ctx.fillRect(-s*.38,-s*1.05,s*.22,s*.22);ctx.fillRect(s*.16,-s*1.05,s*.22,s*.22);
+      ctx.fillStyle="#1a2d36";ctx.shadowBlur=0;
       ctx.fillRect(-s*.22,-s*.62,s*.44,s*.12);
       ctx.fillStyle="#fff";ctx.font=`900 ${Math.max(12,16*p.scale)}px system-ui`;ctx.textAlign="center";
-      ctx.fillText("PUNCH",0,-s*1.7);
+      ctx.fillText("CROSS",0,-s*1.7);
     }
     ctx.restore();
   });
@@ -968,41 +1037,105 @@ function drawRunnerObjects(){
 
 function drawRunnerAvatar(){
   const pl=trackedPlayers[0];
-  const x=innerWidth/2,y=innerHeight*.84;
-  ctx.save();ctx.translate(x,y);
+  if(!pl)return;
 
-  let bob=Math.sin(performance.now()/95)*4;
-  if(runnerAction==="JUMP")bob=-65;
-  if(runnerAction==="DUCK")bob=25;
+  const by={};
+  pl.bodyPoints.forEach(p=>by[p.i]=p);
+  const LS=by[11],RS=by[12],LE=by[13],RE=by[14],LH=by[15],RH=by[16];
+  const LHIp=by[23],RHIp=by[24],LK=by[25],RK=by[26];
+  if(!LS||!RS)return;
 
-  ctx.translate(0,bob);
-  // ブロック型プレイヤー
-  const bodyH=runnerAction==="DUCK"?48:78;
-  ctx.fillStyle="#2b82c9";ctx.fillRect(-28,-bodyH,56,bodyH);
-  ctx.fillStyle="#e5b88a";ctx.fillRect(-25,-bodyH-48,50,48);
+  // カメラ上の体を、ゲーム画面下中央へ正規化して投影
+  const shoulderMidX=(LS.x+RS.x)/2;
+  const shoulderMidY=(LS.y+RS.y)/2;
+  const hipMidY=LHIp&&RHIp?(LHIp.y+RHIp.y)/2:shoulderMidY+180;
+  const torso=Math.max(90,hipMidY-shoulderMidY);
 
-  // 顔
-  ctx.fillStyle="#222";ctx.fillRect(-13,-bodyH-31,6,6);ctx.fillRect(7,-bodyH-31,6,6);
-  ctx.fillRect(-7,-bodyH-17,14,4);
+  const baseX=innerWidth/2;
+  let baseY=innerHeight*.84;
+  if(runnerAction==="JUMP")baseY-=70;
+  if(runnerAction==="DUCK")baseY+=28;
 
-  // 腕
-  ctx.fillStyle=performance.now()<runnerPunchUntil?"#ffe66d":"#e5b88a";
-  if(runnerAction==="PUNCH"||performance.now()<runnerPunchUntil){
-    ctx.fillRect(25,-bodyH+8,65,16);
-    ctx.fillRect(-42,-bodyH+8,16,55);
-  }else{
-    ctx.fillRect(28,-bodyH+8,16,55);ctx.fillRect(-44,-bodyH+8,16,55);
+  const scale=Math.min(1.1,Math.max(.55,150/torso));
+
+  function mapPt(p){
+    if(!p)return null;
+    return {
+      x:baseX+(p.x-shoulderMidX)*scale,
+      y:baseY-(hipMidY-p.y)*scale
+    };
   }
 
-  // 足
-  if(runnerAction!=="DUCK"){
-    ctx.fillStyle="#343d53";ctx.fillRect(-24,0,18,48);ctx.fillRect(6,0,18,48);
+  const aLS=mapPt(LS),aRS=mapPt(RS),aLE=mapPt(LE),aRE=mapPt(RE),aLH=mapPt(LH),aRH=mapPt(RH);
+  const aLHip=mapPt(LHIp),aRHip=mapPt(RHIp),aLK=mapPt(LK),aRK=mapPt(RK);
+
+  ctx.save();
+  ctx.lineCap="round";ctx.lineJoin="round";
+
+  // 発光する実体感のあるボディ
+  const limb=(a,b,w,color="#68d9ff")=>{
+    if(!a||!b)return;
+    ctx.strokeStyle=color;ctx.shadowColor=color;ctx.shadowBlur=18;ctx.lineWidth=w;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    ctx.strokeStyle="rgba(235,252,255,.9)";ctx.shadowBlur=4;ctx.lineWidth=Math.max(4,w*.26);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  };
+
+  limb(aLS,aLE,20);limb(aLE,aLH,18);
+  limb(aRS,aRE,20);limb(aRE,aRH,18);
+  limb(aLHip,aLK,22,"#75b6ff");limb(aRHip,aRK,22,"#75b6ff");
+
+  // 胴体
+  if(aLS&&aRS&&aLHip&&aRHip){
+    ctx.fillStyle="rgba(25,115,170,.46)";
+    ctx.strokeStyle="#67ddff";ctx.lineWidth=4;ctx.shadowColor="#67ddff";ctx.shadowBlur=20;
+    ctx.beginPath();
+    ctx.moveTo(aLS.x,aLS.y);ctx.lineTo(aLHip.x,aLHip.y);
+    ctx.lineTo(aRHip.x,aRHip.y);ctx.lineTo(aRS.x,aRS.y);ctx.closePath();
+    ctx.fill();ctx.stroke();
   }
 
-  // 顔写真があれば小さく頭に
-  if(playerFace){
-    ctx.save();ctx.beginPath();ctx.rect(-22,-bodyH-45,44,42);ctx.clip();
-    ctx.globalAlpha=.88;ctx.drawImage(playerFace,-22,-bodyH-45,44,44);ctx.restore();
+  // 頭（PLAYER SCANの顔を使用）
+  const sw=Math.max(70,Math.hypot(aLS.x-aRS.x,aLS.y-aRS.y));
+  const hr=Math.min(48,Math.max(30,sw*.28));
+  const hx=(aLS.x+aRS.x)/2;
+  const hy=(aLS.y+aRS.y)/2-hr*1.45;
+
+  ctx.save();
+  ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);ctx.clip();
+  if(playerFace)ctx.drawImage(playerFace,hx-hr,hy-hr,hr*2,hr*2);
+  else{ctx.fillStyle="#d6a77d";ctx.fillRect(hx-hr,hy-hr,hr*2,hr*2)}
+  ctx.restore();
+  ctx.strokeStyle="#bff6ff";ctx.lineWidth=4;ctx.shadowColor="#68ddff";ctx.shadowBlur=16;
+  ctx.beginPath();ctx.arc(hx,hy,hr,0,Math.PI*2);ctx.stroke();
+
+  // 手を強調
+  for(const h of [aLH,aRH]){
+    if(!h)continue;
+    const g=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,28);
+    g.addColorStop(0,"#fff");g.addColorStop(.25,"#7ffcff");g.addColorStop(1,"rgba(127,252,255,0)");
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(h.x,h.y,28,0,Math.PI*2);ctx.fill();
+  }
+
+  // クロスビーム
+  if(performance.now()<runnerBeamUntil){
+    const origin=aLH&&aRH?{x:(aLH.x+aRH.x)/2,y:(aLH.y+aRH.y)/2}:{x:baseX,y:baseY-90};
+    const endY=innerHeight*.29;
+
+    ctx.strokeStyle="#9ffcff";
+    ctx.shadowColor="#56eaff";
+    ctx.shadowBlur=30;
+    ctx.lineWidth=16;
+    ctx.beginPath();ctx.moveTo(origin.x,origin.y);ctx.lineTo(innerWidth/2,endY);ctx.stroke();
+
+    ctx.strokeStyle="#fff";
+    ctx.shadowBlur=10;
+    ctx.lineWidth=5;
+    ctx.beginPath();ctx.moveTo(origin.x,origin.y);ctx.lineTo(innerWidth/2,endY);ctx.stroke();
+
+    // ビーム先端
+    ctx.fillStyle="#dfffff";ctx.shadowBlur=35;
+    ctx.beginPath();ctx.arc(innerWidth/2,endY,18,0,Math.PI*2);ctx.fill();
   }
 
   ctx.restore();
