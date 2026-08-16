@@ -45,13 +45,57 @@ button:disabled{opacity:.45;cursor:wait}
 .swatch{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border:1px solid rgba(255,255,255,.18);border-radius:999px}
 .dot{width:18px;height:18px;border-radius:50%;background:#5fe6ff}
 @media(max-width:760px){.modeGrid{grid-template-columns:1fr}.mode{min-height:210px}#titleHud{top:96px;width:86vw}}
+
+#scanPreview{
+  position:relative;
+  width:min(620px,86vw);
+  aspect-ratio:16/9;
+  margin:18px auto;
+  border:1px solid rgba(255,255,255,.18);
+  overflow:hidden;
+  background:#000;
+}
+#scanCanvas{
+  width:100%;
+  height:100%;
+  display:block;
+}
+#faceGuide{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  width:30%;
+  aspect-ratio:1/1.18;
+  border:4px solid rgba(100,235,255,.95);
+  border-radius:48%;
+  box-shadow:0 0 28px rgba(70,220,255,.8), inset 0 0 28px rgba(70,220,255,.2);
+  pointer-events:none;
+}
+#faceGuide::after{
+  content:"顔をここに合わせてください";
+  position:absolute;
+  left:50%;
+  bottom:-38px;
+  transform:translateX(-50%);
+  white-space:nowrap;
+  font-size:13px;
+  font-weight:900;
+  color:#bff5ff;
+}
+#faceThumb{
+  width:96px;height:96px;border-radius:50%;object-fit:cover;
+  border:3px solid #6eeaff;box-shadow:0 0 18px rgba(70,220,255,.6);
+  display:none;margin:14px auto 0;
+}
 </style>
+
 </head>
 <body>
 <div id="app">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
-  <div id="version">Ver. 1.2</div>
+  <div id="version">Ver. 1.3 PLAYER SCAN</div>
   <div id="debug"></div>
 
   <div id="hud">
@@ -92,7 +136,7 @@ button:disabled{opacity:.45;cursor:wait}
           <p>実物の発光ライトセーバーで<br>敵のレーザーを跳ね返せ！</p>
         </div>
       </div>
-      <p class="small">APP READY ✓ / Ver. 1.2</p>
+      <p class="small">APP READY ✓ / Ver. 1.3 PLAYER SCAN</p>
     </div>
   </section>
 
@@ -117,6 +161,24 @@ button:disabled{opacity:.45;cursor:wait}
     </div>
   </section>
 
+
+  <section id="scanScreen" class="screen">
+    <div class="card">
+      <h2>PLAYER SCAN</h2>
+      <p>顔をガイド枠に合わせて撮影します。<br>撮影した顔は、このブラウザ内だけでゲーム素材として使います。</p>
+      <div id="scanPreview">
+        <canvas id="scanCanvas"></canvas>
+        <div id="faceGuide"></div>
+      </div>
+      <img id="faceThumb" alt="captured face preview">
+      <div class="row">
+        <button id="captureFaceBtn">📸 顔を撮影</button>
+        <button id="skipFaceBtn">スキップ</button>
+      </div>
+      <p class="small">※ 顔画像はサーバーへ送信しません。</p>
+    </div>
+  </section>
+
   <section id="resultScreen" class="screen">
     <div class="card">
       <h2>FINISH!</h2>
@@ -134,15 +196,16 @@ button:disabled{opacity:.45;cursor:wait}
 (function(){
 "use strict";
 
-const VERSION="1.2";
+const VERSION="1.3 PLAYER SCAN";
 const $=id=>document.getElementById(id);
 const video=$("video"),canvas=$("game"),ctx=canvas.getContext("2d");
-const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen");
+const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen"),scanScreen=$("scanScreen");
 const hud=$("hud"),debug=$("debug");
 const chooseBalloon=$("chooseBalloon"),chooseLaser=$("chooseLaser"),cameraBtn=$("cameraBtn");
 const scoreEl=$("score"),comboEl=$("combo"),timeEl=$("time"),statusEl=$("status");
 const gameTitle=$("gameTitle"),gameSubtitle=$("gameSubtitle"),comboWrap=$("comboWrap"),detectBox=$("detectBox");
 const detText=$("detText"),confidenceEl=$("confidence"),cameraTitle=$("cameraTitle"),cameraText=$("cameraText"),cameraError=$("cameraError");
+const scanCanvas=$("scanCanvas"),scanCtx=scanCanvas.getContext("2d"),faceThumb=$("faceThumb");
 const livesEl=$("lives"),livesWrap=$("livesWrap"),countdownEl=$("countdown");
 
 let mode=null,stream=null,running=false,gameStarted=false,gameEnded=false;
@@ -159,6 +222,9 @@ let floatingTexts=[];
 const small=document.createElement("canvas"); small.width=320; small.height=180;
 const sctx=small.getContext("2d",{willReadFrequently:true});
 let smoothHands=[null,null],saberTrail=[];
+let playerFace=null;
+let pendingAfterScan=null;
+let scanAnimationRunning=false;
 
 function showError(err,where){
   console.error(where,err);
@@ -167,7 +233,7 @@ function showError(err,where){
 }
 function clearError(){debug.style.display="none";debug.textContent=""}
 function showScreen(el){
-  [menu,cameraScreen,calScreen,resultScreen].forEach(s=>s.classList.remove("active"));
+  [menu,cameraScreen,calScreen,resultScreen,scanScreen].forEach(s=>s.classList.remove("active"));
   if(el)el.classList.add("active");
 }
 function resize(){
@@ -193,6 +259,86 @@ $("rememberColor").addEventListener("click",()=>{
 });
 $("startBlue").addEventListener("click",()=>{targetHue=205;showScreen(null);startCountdown()});
 
+$("captureFaceBtn").addEventListener("click",()=>{
+  captureFace();
+  setTimeout(()=>finishScan(),350);
+});
+$("skipFaceBtn").addEventListener("click",()=>{
+  playerFace=null;
+  finishScan();
+});
+
+
+
+function openPlayerScan(afterScan){
+  pendingAfterScan=afterScan;
+  showScreen(scanScreen);
+  scanAnimationRunning=true;
+  drawScanPreview();
+}
+
+function drawScanPreview(){
+  if(!scanAnimationRunning || !scanScreen.classList.contains("active"))return;
+  if(video.readyState>=2){
+    const rect=scanCanvas.getBoundingClientRect();
+    const dpr=Math.min(devicePixelRatio||1,2);
+    const w=Math.max(1,Math.floor(rect.width*dpr));
+    const h=Math.max(1,Math.floor(rect.height*dpr));
+    if(scanCanvas.width!==w||scanCanvas.height!==h){
+      scanCanvas.width=w;scanCanvas.height=h;
+    }
+    scanCtx.save();
+    scanCtx.clearRect(0,0,w,h);
+    scanCtx.translate(w,0);
+    scanCtx.scale(-1,1);
+    const vw=video.videoWidth,vh=video.videoHeight;
+    const scale=Math.max(w/vw,h/vh);
+    const dw=vw*scale,dh=vh*scale;
+    scanCtx.drawImage(video,(w-dw)/2,(h-dh)/2,dw,dh);
+    scanCtx.restore();
+  }
+  requestAnimationFrame(drawScanPreview);
+}
+
+function captureFace(){
+  if(video.readyState<2)return;
+  const off=document.createElement("canvas");
+  const size=256;
+  off.width=size;off.height=size;
+  const octx=off.getContext("2d");
+
+  const vw=video.videoWidth,vh=video.videoHeight;
+  // 中央付近を正方形で切り抜き。ガイド枠と対応。
+  const crop=Math.min(vw,vh)*0.48;
+  const sx=(vw-crop)/2;
+  const sy=(vh-crop)/2;
+
+  octx.save();
+  octx.translate(size,0);
+  octx.scale(-1,1);
+  octx.beginPath();
+  octx.arc(size/2,size/2,size/2,0,Math.PI*2);
+  octx.clip();
+  octx.drawImage(video,sx,sy,crop,crop,0,0,size,size);
+  octx.restore();
+
+  const img=new Image();
+  img.onload=()=>{
+    playerFace=img;
+    faceThumb.src=off.toDataURL("image/png");
+    faceThumb.style.display="block";
+  };
+  img.src=off.toDataURL("image/png");
+}
+
+function finishScan(){
+  scanAnimationRunning=false;
+  showScreen(null);
+  const next=pendingAfterScan;
+  pendingAfterScan=null;
+  if(typeof next==="function")next();
+}
+
 function selectMode(m){
   clearError();mode=m;
   cameraTitle.textContent=m==="balloon"?"BALLOON PANIC":"LASER GUARD";
@@ -209,14 +355,13 @@ cameraBtn.addEventListener("click",async()=>{
     if(!running){running=true;lastFrame=0;requestAnimationFrame(loop)}
     if(mode==="laser"){
       cameraBtn.disabled=false;
-      showScreen(calScreen);
+      openPlayerScan(()=>showScreen(calScreen));
     }else{
       cameraTitle.textContent="LOADING...";
       cameraText.innerHTML="人体認識AIを準備しています。<br>初回のみ数秒かかります。";
       await ensurePose();
       cameraBtn.disabled=false;
-      showScreen(null);
-      startCountdown();
+      openPlayerScan(()=>startCountdown());
     }
   }catch(err){
     cameraBtn.disabled=false;
@@ -336,8 +481,8 @@ function updatePose(now){
   });
 }
 function spawnBalloon(now){
-  const r=Math.max(28,Math.min(52,innerWidth*.035)),special=Math.random()<.12;
-  balloons.push({x:r+Math.random()*(innerWidth-r*2),y:-r,r,speed:105+Math.random()*85,sway:18+Math.random()*32,phase:Math.random()*6.28,born:now,scale:.25,color:special?"#ffd84d":["#ff5470","#4dd7ff","#7fef9b"][Math.floor(Math.random()*3)],pts:special?30:10,pop:false});
+  const r=Math.max(28,Math.min(52,innerWidth*.035)),special=Math.random()<.12,faceBalloon=!!playerFace&&Math.random()<.14;
+  balloons.push({x:r+Math.random()*(innerWidth-r*2),y:-r,r,speed:105+Math.random()*85,sway:18+Math.random()*32,phase:Math.random()*6.28,born:now,scale:.25,color:faceBalloon?"#7cefff":special?"#ffd84d":["#ff5470","#4dd7ff","#7fef9b"][Math.floor(Math.random()*3)],pts:faceBalloon?50:special?30:10,pop:false,faceBalloon});
 }
 function updateBalloon(now,dt){
   if(now-lastSpawn>720){lastSpawn=now;spawnBalloon(now)}
@@ -386,7 +531,8 @@ function spawnEnemy(){
   let type="drone",r=34,hp=1,fire=.52,points=100;
   if(roll>.72&&roll<=.92){type="scout";r=25;fire=.78;points=160}
   else if(roll>.92){type="heavy";r=45;hp=2;fire=.36;points=300}
-  const e={x:m+Math.random()*(innerWidth-m*2),y:115+Math.random()*175,r,baseX:0,phase:Math.random()*6.28,alive:true,type,hp,fire,points};
+  const faceEnemy=!!playerFace&&Math.random()<.30;
+  const e={x:m+Math.random()*(innerWidth-m*2),y:115+Math.random()*175,r,baseX:0,phase:Math.random()*6.28,alive:true,type,hp,fire,points,faceEnemy};
   e.baseX=e.x;enemies.push(e);
 }
 function shoot(e){const tx=innerWidth*.5+(Math.random()-.5)*220,ty=innerHeight*.82,dx=tx-e.x,dy=ty-e.y,L=Math.hypot(dx,dy)||1,s=420+Math.random()*90;bolts.push({x:e.x,y:e.y,vx:dx/L*s,vy:dy/L*s,ref:false,dead:false});tone(150,.04)}
@@ -450,7 +596,36 @@ function drawBg(){
   const g=ctx.createLinearGradient(0,0,0,innerHeight);g.addColorStop(0,"#0a1d3a");g.addColorStop(1,"#020711");ctx.fillStyle=g;ctx.fillRect(0,0,innerWidth,innerHeight);
   if(video.readyState>=2){ctx.save();ctx.globalAlpha=.30;ctx.translate(innerWidth,0);ctx.scale(-1,1);const vw=video.videoWidth,vh=video.videoHeight,sc=Math.max(innerWidth/vw,innerHeight/vh),dw=vw*sc,dh=vh*sc;ctx.drawImage(video,(innerWidth-dw)/2,(innerHeight-dh)/2,dw,dh);ctx.restore();ctx.fillStyle="rgba(2,8,18,.42)";ctx.fillRect(0,0,innerWidth,innerHeight)}
 }
-function drawBalloon(b){ctx.save();ctx.translate(b.x,b.y);ctx.scale(b.scale,b.scale);ctx.shadowColor=b.color;ctx.shadowBlur=18;ctx.fillStyle=b.color;ctx.beginPath();ctx.ellipse(0,0,b.r*.78,b.r,0,0,Math.PI*2);ctx.fill();ctx.fillStyle="rgba(255,255,255,.45)";ctx.beginPath();ctx.ellipse(-b.r*.23,-b.r*.3,b.r*.13,b.r*.22,-.4,0,Math.PI*2);ctx.fill();if(b.pts>=30){ctx.fillStyle="#4b3900";ctx.font=`900 ${b.r*.5}px system-ui`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("★",0,0)}ctx.restore()}
+function drawBalloon(b){
+  ctx.save();ctx.translate(b.x,b.y);ctx.scale(b.scale,b.scale);
+  ctx.shadowColor=b.color;ctx.shadowBlur=18;
+  ctx.fillStyle=b.color;ctx.beginPath();ctx.ellipse(0,0,b.r*.78,b.r,0,0,Math.PI*2);ctx.fill();
+
+  if(b.faceBalloon && playerFace){
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0,0,b.r*.55,0,Math.PI*2);
+    ctx.clip();
+    ctx.drawImage(playerFace,-b.r*.55,-b.r*.55,b.r*1.1,b.r*1.1);
+    ctx.restore();
+
+    ctx.strokeStyle="rgba(255,255,255,.95)";
+    ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(0,0,b.r*.57,0,Math.PI*2);ctx.stroke();
+
+    ctx.fillStyle="#fff";
+    ctx.font=`900 ${Math.max(13,b.r*.30)}px system-ui`;
+    ctx.textAlign="center";
+    ctx.fillText("50",0,b.r*.82);
+  }else{
+    ctx.fillStyle="rgba(255,255,255,.45)";
+    ctx.beginPath();ctx.ellipse(-b.r*.23,-b.r*.3,b.r*.13,b.r*.22,-.4,0,Math.PI*2);ctx.fill();
+    if(b.pts>=30){
+      ctx.fillStyle="#4b3900";ctx.font=`900 ${b.r*.5}px system-ui`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("★",0,0)
+    }
+  }
+  ctx.restore()
+}
 function drawBody(){
   const by={};
   bodyPoints.forEach(p=>by[p.i]=p);
@@ -598,8 +773,21 @@ function drawEnemy(e){
   ctx.fillStyle=e.type==="scout"?"#3b2140":"#2a3140";
   ctx.fillRect(-e.r-18,-7,e.r*2+36,14);
 
-  ctx.fillStyle=glow;
-  ctx.fillRect(-Math.min(18,e.r*.55),-5,Math.min(36,e.r*1.1),10);
+  if(e.faceEnemy && playerFace){
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0,0,e.r*.58,0,Math.PI*2);
+    ctx.clip();
+    ctx.drawImage(playerFace,-e.r*.58,-e.r*.58,e.r*1.16,e.r*1.16);
+    ctx.restore();
+
+    ctx.strokeStyle=glow;
+    ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(0,0,e.r*.60,0,Math.PI*2);ctx.stroke();
+  }else{
+    ctx.fillStyle=glow;
+    ctx.fillRect(-Math.min(18,e.r*.55),-5,Math.min(36,e.r*1.1),10);
+  }
 
   if(e.type==="heavy"){
     ctx.strokeStyle="#ffcf72";ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,e.r-7,0,Math.PI*2);ctx.stroke();
