@@ -18,8 +18,8 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);c
 .card h1{font-size:clamp(42px,7vw,84px)}
 .card h2{font-size:clamp(34px,6vw,64px)}
 .card p{color:#dcecff;line-height:1.65}
-.modeGrid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:28px}
-.mode{border:1px solid rgba(255,255,255,.18);padding:26px;background:linear-gradient(180deg,rgba(20,42,74,.95),rgba(4,13,27,.96));cursor:pointer;transition:.18s;min-height:260px}
+.modeGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
+.mode{border:1px solid rgba(255,255,255,.18);padding:22px;background:linear-gradient(180deg,rgba(20,42,74,.95),rgba(4,13,27,.96));cursor:pointer;transition:.18s;min-height:250px}
 .mode:hover{transform:translateY(-4px);filter:brightness(1.08)}
 .mode .icon{font-size:82px;line-height:1}
 .mode h3{font-size:30px;margin:14px 0 8px}
@@ -44,7 +44,7 @@ button:disabled{opacity:.45;cursor:wait}
 .small{font-size:13px!important;opacity:.72}
 .swatch{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border:1px solid rgba(255,255,255,.18);border-radius:999px}
 .dot{width:18px;height:18px;border-radius:50%;background:#5fe6ff}
-@media(max-width:760px){.modeGrid{grid-template-columns:1fr}.mode{min-height:210px}#titleHud{top:96px;width:86vw}}
+@media(max-width:900px){.modeGrid{grid-template-columns:1fr}.mode{min-height:210px}#titleHud{top:96px;width:86vw}}
 
 #scanPreview{
   position:relative;
@@ -88,6 +88,13 @@ button:disabled{opacity:.45;cursor:wait}
   border:3px solid #6eeaff;box-shadow:0 0 18px rgba(70,220,255,.6);
   display:none;margin:14px auto 0;
 }
+
+#p1Box{left:18px;top:18px;display:none;border-color:rgba(72,229,255,.8)}
+#p2Box{right:18px;top:18px;display:none;border-color:rgba(255,105,210,.8)}
+#runnerInfo{right:18px;bottom:18px;display:none;min-width:210px}
+.playerPick{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:25px}
+.playerPick button{min-width:230px;font-size:24px;padding:22px}
+.runnerKey{display:inline-block;padding:3px 8px;margin:2px;border-radius:6px;background:rgba(255,255,255,.12);font-weight:900}
 </style>
 
 </head>
@@ -95,10 +102,18 @@ button:disabled{opacity:.45;cursor:wait}
 <div id="app">
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
-  <div id="version">Ver. 1.4 BIG FACE</div>
+  <div id="version">Ver. 2.0 DUO + BLOCK RUN</div>
   <div id="debug"></div>
 
   <div id="hud">
+    <div id="p1Box" class="hudbox">
+      <div class="label">PLAYER 1</div>
+      <div id="p1Score" class="big">0</div>
+    </div>
+    <div id="p2Box" class="hudbox">
+      <div class="label" style="color:#ff8fe3">PLAYER 2</div>
+      <div id="p2Score" class="big">0</div>
+    </div>
     <div id="scoreBox" class="hudbox">
       <div class="label">SCORE</div>
       <div id="score" class="big">0</div>
@@ -110,6 +125,11 @@ button:disabled{opacity:.45;cursor:wait}
       <div class="big"><span id="time">45</span><span style="font-size:.42em"> 秒</span></div>
     </div>
     <div id="titleHud"><h2 id="gameTitle"></h2><p id="gameSubtitle"></p></div>
+    <div id="runnerInfo" class="hudbox">
+      <div class="label">BLOCK RUN</div>
+      <div style="font-size:20px;font-weight:950">LIFE ♥ <span id="runnerLives">3</span></div>
+      <div id="runnerAction" style="margin-top:6px;font-size:18px;font-weight:950;color:#ffd45f">RUN</div>
+    </div>
     <div id="detectBox" class="hudbox">
       <div class="label">SABER DETECTION</div>
       <div style="font-size:22px;font-weight:950" id="detText">SEARCHING</div>
@@ -128,15 +148,33 @@ button:disabled{opacity:.45;cursor:wait}
         <div id="chooseBalloon" class="mode">
           <div class="icon">🎈</div>
           <h3>BALLOON PANIC</h3>
-          <p>両手で風船を割ろう！<br>30秒でハイスコアを目指せ。</p>
+          <p>両手で風船を割ろう！<br>1人でも2人対戦でも遊べる！</p>
         </div>
         <div id="chooseLaser" class="mode">
           <div class="icon">⚔️</div>
           <h3>LASER GUARD</h3>
           <p>実物の発光ライトセーバーで<br>敵のレーザーを跳ね返せ！</p>
         </div>
+        <div id="chooseRunner" class="mode">
+          <div class="icon">🧱</div>
+          <h3>BLOCK RUN</h3>
+          <p>ブロック世界を前進！<br>ジャンプ・しゃがみ・パンチで突破。</p>
+        </div>
       </div>
-      <p class="small">APP READY ✓ / Ver. 1.4 BIG FACE</p>
+      <p class="small">APP READY ✓ / Ver. 2.0 DUO + BLOCK RUN</p>
+    </div>
+  </section>
+
+
+  <section id="playerScreen" class="screen">
+    <div class="card">
+      <h2>BALLOON PANIC</h2>
+      <p>プレイ人数を選んでください。</p>
+      <div class="playerPick">
+        <button id="onePlayerBtn">👤 1 PLAYER</button>
+        <button id="twoPlayerBtn">👥 2 PLAYERS</button>
+      </div>
+      <p class="small">2人プレイは、カメラの左側がP1・右側がP2になります。</p>
     </div>
   </section>
 
@@ -196,21 +234,42 @@ button:disabled{opacity:.45;cursor:wait}
 (function(){
 "use strict";
 
-const VERSION="1.4 BIG FACE";
+const VERSION="2.0 DUO + BLOCK RUN";
 const $=id=>document.getElementById(id);
 const video=$("video"),canvas=$("game"),ctx=canvas.getContext("2d");
-const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen"),scanScreen=$("scanScreen");
+const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen"),scanScreen=$("scanScreen"),playerScreen=$("playerScreen");
 const hud=$("hud"),debug=$("debug");
-const chooseBalloon=$("chooseBalloon"),chooseLaser=$("chooseLaser"),cameraBtn=$("cameraBtn");
+const chooseBalloon=$("chooseBalloon"),chooseLaser=$("chooseLaser"),chooseRunner=$("chooseRunner"),cameraBtn=$("cameraBtn");
 const scoreEl=$("score"),comboEl=$("combo"),timeEl=$("time"),statusEl=$("status");
 const gameTitle=$("gameTitle"),gameSubtitle=$("gameSubtitle"),comboWrap=$("comboWrap"),detectBox=$("detectBox");
 const detText=$("detText"),confidenceEl=$("confidence"),cameraTitle=$("cameraTitle"),cameraText=$("cameraText"),cameraError=$("cameraError");
 const scanCanvas=$("scanCanvas"),scanCtx=scanCanvas.getContext("2d"),faceThumb=$("faceThumb");
 const livesEl=$("lives"),livesWrap=$("livesWrap"),countdownEl=$("countdown");
+const scoreBox=$("scoreBox"),timeBox=$("timeBox"),p1Box=$("p1Box"),p2Box=$("p2Box");
+const p1ScoreEl=$("p1Score"),p2ScoreEl=$("p2Score"),runnerInfo=$("runnerInfo");
+const runnerLivesEl=$("runnerLives"),runnerActionEl=$("runnerAction");
 
 let mode=null,stream=null,running=false,gameStarted=false,gameEnded=false;
 let score=0,combo=0,startAt=0,lastFrame=0,lastSpawn=0,duration=45;
 let balloons=[],hands=[],bodyPoints=[],particles=[],enemies=[],bolts=[];
+let trackedPlayers=[];
+let balloonPlayerCount=1;
+let balloonScores=[0,0];
+let playerSmooth=[
+  [{x:0,y:0,ready:false},{x:0,y:0,ready:false}],
+  [{x:0,y:0,ready:false},{x:0,y:0,ready:false}]
+];
+
+let runnerObjects=[];
+let runnerLives=3;
+let runnerBaseline=null;
+let runnerAction="RUN";
+let runnerPunchUntil=0;
+let runnerPrevWrists=[null,null];
+let runnerDistance=0;
+let runnerCleared=0;
+let runnerLastObstacle=0;
+let runnerShake=0;
 let audioCtx=null;
 let pose=null,lastVideoTime=-1,lastPoseAt=0;
 let MP=null;
@@ -233,7 +292,7 @@ function showError(err,where){
 }
 function clearError(){debug.style.display="none";debug.textContent=""}
 function showScreen(el){
-  [menu,cameraScreen,calScreen,resultScreen,scanScreen].forEach(s=>s.classList.remove("active"));
+  [menu,cameraScreen,calScreen,resultScreen,scanScreen,playerScreen].forEach(s=>s.classList.remove("active"));
   if(el)el.classList.add("active");
 }
 function resize(){
@@ -244,13 +303,17 @@ function resize(){
 }
 addEventListener("resize",resize);resize();
 
-chooseBalloon.addEventListener("click",()=>selectMode("balloon"));
+chooseBalloon.addEventListener("click",()=>showScreen(playerScreen));
 chooseLaser.addEventListener("click",()=>selectMode("laser"));
+chooseRunner.addEventListener("click",()=>selectMode("runner"));
+$("onePlayerBtn").addEventListener("click",()=>{balloonPlayerCount=1;selectMode("balloon")});
+$("twoPlayerBtn").addEventListener("click",()=>{balloonPlayerCount=2;selectMode("balloon")});
 $("backBtn").addEventListener("click",goMenu);
 $("menuBtn").addEventListener("click",goMenu);
 $("againBtn").addEventListener("click",()=>{
   resultScreen.classList.remove("active");
-  if(mode==="laser")showScreen(calScreen); else startCountdown();
+  if(mode==="laser")showScreen(calScreen);
+  else startCountdown();
 });
 $("rememberColor").addEventListener("click",()=>{
   const h=sampleHue();
@@ -341,8 +404,18 @@ function finishScan(){
 
 function selectMode(m){
   clearError();mode=m;
-  cameraTitle.textContent=m==="balloon"?"BALLOON PANIC":"LASER GUARD";
-  cameraText.innerHTML=m==="balloon"?"カメラの前に立って、両手で風船を割ろう！":"発光ライトセーバーを準備してください。<br>青色で始めるのがおすすめです。";
+  if(m==="balloon"){
+    cameraTitle.textContent="BALLOON PANIC";
+    cameraText.innerHTML=balloonPlayerCount===2
+      ?"2人とも全身が映るように、少しカメラから離れてください。"
+      :"カメラの前に立って、両手で風船を割ろう！";
+  }else if(m==="laser"){
+    cameraTitle.textContent="LASER GUARD";
+    cameraText.innerHTML="発光ライトセーバーを準備してください。<br>青色で始めるのがおすすめです。";
+  }else{
+    cameraTitle.textContent="BLOCK RUN";
+    cameraText.innerHTML="全身が映る位置に立ってください。<br><span class='runnerKey'>JUMP</span> ジャンプ　<span class='runnerKey'>DUCK</span> しゃがむ　<span class='runnerKey'>PUNCH</span> パンチ";
+  }
   cameraError.textContent="";
   cameraBtn.disabled=false;
   showScreen(cameraScreen);
@@ -361,7 +434,8 @@ cameraBtn.addEventListener("click",async()=>{
       cameraText.innerHTML="人体認識AIを準備しています。<br>初回のみ数秒かかります。";
       await ensurePose();
       cameraBtn.disabled=false;
-      openPlayerScan(()=>startCountdown());
+      if(mode==="balloon")openPlayerScan(()=>startCountdown());
+      else {showScreen(null);startCountdown();}
     }
   }catch(err){
     cameraBtn.disabled=false;
@@ -385,12 +459,12 @@ async function ensurePose(){
   try{
     pose=await MP.PoseLandmarker.createFromOptions(vision,{
       baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",delegate:"GPU"},
-      runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.45,minPosePresenceConfidence:.45,minTrackingConfidence:.45
+      runningMode:"VIDEO",numPoses:2,minPoseDetectionConfidence:.45,minPosePresenceConfidence:.45,minTrackingConfidence:.45
     });
   }catch(e){
     pose=await MP.PoseLandmarker.createFromOptions(vision,{
       baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"},
-      runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.45,minPosePresenceConfidence:.45,minTrackingConfidence:.45
+      runningMode:"VIDEO",numPoses:2,minPoseDetectionConfidence:.45,minPosePresenceConfidence:.45,minTrackingConfidence:.45
     });
   }
 }
@@ -428,15 +502,36 @@ function beginGame(){
   clearError();hud.style.display="block";
   score=0;combo=0;lives=5;maxCombo=0;shotsDeflected=0;enemiesDestroyed=0;
   scoreEl.textContent="0";comboEl.textContent="0";livesEl.textContent=lives;timeEl.textContent=duration;
+  balloonScores=[0,0];p1ScoreEl.textContent="0";p2ScoreEl.textContent="0";
+  runnerObjects=[];runnerLives=3;runnerLivesEl.textContent="3";runnerBaseline=null;runnerAction="RUN";
+  runnerPunchUntil=0;runnerPrevWrists=[null,null];runnerDistance=0;runnerCleared=0;runnerLastObstacle=0;runnerShake=0;
   floatingTexts=[];
   balloons=[];particles=[];enemies=[];bolts=[];hands=[];bodyPoints=[];saberTrail=[];
   startAt=performance.now();lastSpawn=0;gameStarted=true;gameEnded=false;
   if(mode==="balloon"){
-    gameTitle.textContent="BALLOON PANIC";gameSubtitle.textContent="両手で風船を割ろう！";
-    comboWrap.style.display="none";livesWrap.style.display="none";detectBox.style.display="none";statusEl.textContent="手で風船を割ろう！";
-  }else{
+    gameTitle.textContent="BALLOON PANIC";
+    gameSubtitle.textContent=balloonPlayerCount===2?"2人対戦！風船をたくさん割ろう！":"両手で風船を割ろう！";
+    comboWrap.style.display="none";livesWrap.style.display="none";detectBox.style.display="none";runnerInfo.style.display="none";
+    if(balloonPlayerCount===2){
+      scoreBox.style.display="none";p1Box.style.display="block";p2Box.style.display="block";
+      timeBox.style.left="50%";timeBox.style.right="auto";timeBox.style.transform="translateX(-50%)";
+    }else{
+      scoreBox.style.display="block";p1Box.style.display="none";p2Box.style.display="none";
+      timeBox.style.left="auto";timeBox.style.right="18px";timeBox.style.transform="";
+    }
+    statusEl.textContent=balloonPlayerCount===2?"左=P1 / 右=P2":"手で風船を割ろう！";
+  }else if(mode==="laser"){
+    scoreBox.style.display="block";p1Box.style.display="none";p2Box.style.display="none";
+    timeBox.style.left="auto";timeBox.style.right="18px";timeBox.style.transform="";
     gameTitle.textContent="LASER GUARD";gameSubtitle.textContent="実物ライトセーバーでレーザーを跳ね返せ！";
-    comboWrap.style.display="block";livesWrap.style.display="block";detectBox.style.display="block";statusEl.textContent="ライトセーバーでレーザーを跳ね返せ！";
+    comboWrap.style.display="block";livesWrap.style.display="block";detectBox.style.display="block";runnerInfo.style.display="none";
+    statusEl.textContent="ライトセーバーでレーザーを跳ね返せ！";
+  }else{
+    scoreBox.style.display="block";p1Box.style.display="none";p2Box.style.display="none";
+    timeBox.style.left="auto";timeBox.style.right="18px";timeBox.style.transform="";
+    gameTitle.textContent="BLOCK RUN";gameSubtitle.textContent="ジャンプ・しゃがみ・パンチで突破！";
+    comboWrap.style.display="none";livesWrap.style.display="none";detectBox.style.display="none";runnerInfo.style.display="block";
+    statusEl.textContent="まず普通に立って姿勢を読み込みます…";
   }
 }
 function goMenu(){gameStarted=false;hud.style.display="none";showScreen(menu);clearError()}
@@ -445,19 +540,34 @@ function loop(now){
   if(!running)return;
   try{
     const dt=Math.min(.033,lastFrame?(now-lastFrame)/1000:.016);lastFrame=now;
-    if(mode==="balloon"&&pose&&now-lastPoseAt>66){lastPoseAt=now;updatePose(now)}
-    if(mode==="laser"&&now-lastSaberAt>50){lastSaberAt=now;detectSaber()}
+
+    if((mode==="balloon"||mode==="runner")&&pose&&now-lastPoseAt>66){
+      lastPoseAt=now;updatePose(now);
+    }
+    if(mode==="laser"&&now-lastSaberAt>50){
+      lastSaberAt=now;detectSaber();
+    }
+
     if(gameStarted){
       const elapsed=(now-startAt)/1000;
       timeEl.textContent=Math.max(0,Math.ceil(duration-elapsed));
       if(elapsed>=duration)finish();
       else if(mode==="balloon")updateBalloon(now,dt);
-      else updateLaser(now,dt);
+      else if(mode==="laser")updateLaser(now,dt);
+      else updateRunner(now,dt);
     }
+
     updateParticles(dt);
-    drawBg();
-    if(mode==="balloon"){balloons.forEach(drawBalloon);drawBody()}
-    else if(mode==="laser"){enemies.forEach(drawEnemy);bolts.forEach(drawBolt);drawSaber()}
+
+    if(mode==="runner"){
+      drawRunnerWorld(now);
+      drawRunnerObjects();
+      drawRunnerAvatar();
+    }else{
+      drawBg();
+      if(mode==="balloon"){balloons.forEach(drawBalloon);drawBody()}
+      else if(mode==="laser"){enemies.forEach(drawEnemy);bolts.forEach(drawBolt);drawSaber()}
+    }
     drawParticles();
   }catch(err){showError(err,"GAME LOOP")}
   requestAnimationFrame(loop);
@@ -465,20 +575,101 @@ function loop(now){
 
 function updatePose(now){
   if(video.readyState<2||video.currentTime===lastVideoTime)return;
+  const prevTime=lastVideoTime;
   lastVideoTime=video.currentTime;
   const res=pose.detectForVideo(video,now);
-  hands=[];bodyPoints=[];
+  trackedPlayers=[];hands=[];bodyPoints=[];
   if(!res.landmarks?.length)return;
-  const lm=res.landmarks[0];
-  [11,12,13,14,15,16].forEach(i=>{const p=lm[i];if(p)bodyPoints.push({i,x:(1-p.x)*innerWidth,y:p.y*innerHeight})});
-  [15,16].forEach((i,k)=>{
-    const p=lm[i];if(!p||(p.visibility??1)<.35)return;
-    const tx=(1-p.x)*innerWidth,ty=p.y*innerHeight;
-    if(!smoothHands[k])smoothHands[k]={x:tx,y:ty};
-    smoothHands[k].x+=(tx-smoothHands[k].x)*.34;
-    smoothHands[k].y+=(ty-smoothHands[k].y)*.34;
-    hands.push({x:smoothHands[k].x,y:smoothHands[k].y,r:46});
+
+  const found=res.landmarks.map((lm,rawIndex)=>{
+    const shoulderX=((1-lm[11].x)+(1-lm[12].x))/2*innerWidth;
+    const shoulderY=(lm[11].y+lm[12].y)/2*innerHeight;
+    const hipY=(lm[23].y+lm[24].y)/2*innerHeight;
+    return {lm,rawIndex,centerX:shoulderX,shoulderY,hipY};
+  }).sort((a,b)=>a.centerX-b.centerX);
+
+  // RUNNERは画面中央に近い1人を採用
+  if(mode==="runner"){
+    found.sort((a,b)=>Math.abs(a.centerX-innerWidth/2)-Math.abs(b.centerX-innerWidth/2));
+  }
+
+  const limit=mode==="balloon"?balloonPlayerCount:1;
+  found.slice(0,limit).forEach((f,pIndex)=>{
+    const lm=f.lm;
+    const pts=[11,12,13,14,15,16,23,24,25,26].map(i=>{
+      const p=lm[i];
+      return {i,x:(1-p.x)*innerWidth,y:p.y*innerHeight,v:(p.visibility??1)};
+    });
+
+    const phands=[];
+    [15,16].forEach((i,k)=>{
+      const p=lm[i];
+      if(!p||(p.visibility??1)<.30)return;
+      const tx=(1-p.x)*innerWidth,ty=p.y*innerHeight;
+      const s=playerSmooth[pIndex][k];
+      if(!s.ready){s.x=tx;s.y=ty;s.ready=true}
+      s.x+=(tx-s.x)*.38;s.y+=(ty-s.y)*.38;
+      const hand={x:s.x,y:s.y,r:46,player:pIndex};
+      phands.push(hand);hands.push(hand);
+    });
+
+    trackedPlayers.push({
+      player:pIndex,
+      bodyPoints:pts,
+      hands:phands,
+      centerX:f.centerX,
+      shoulderY:f.shoulderY,
+      hipY:f.hipY,
+      landmarks:lm
+    });
   });
+
+  if(mode==="balloon"&&trackedPlayers.length){
+    bodyPoints=trackedPlayers[0].bodyPoints;
+  }
+
+  if(mode==="runner"&&trackedPlayers[0]){
+    const p=trackedPlayers[0];
+    const nowMs=performance.now();
+
+    if(!runnerBaseline){
+      runnerBaseline={shoulderY:p.shoulderY,hipY:p.hipY};
+      statusEl.textContent="JUMP / DUCK / PUNCH!";
+    }
+
+    const jumpThreshold=Math.max(38,innerHeight*.055);
+    const duckThreshold=Math.max(45,innerHeight*.065);
+    let action="RUN";
+
+    if(p.hipY < runnerBaseline.hipY-jumpThreshold){
+      action="JUMP";
+    }else if(p.shoulderY > runnerBaseline.shoulderY+duckThreshold){
+      action="DUCK";
+    }
+
+    // パンチ：手首の高速移動を検出
+    p.hands.forEach((h,k)=>{
+      const prev=runnerPrevWrists[k];
+      if(prev){
+        const dt=Math.max(.04,(nowMs-prev.t)/1000);
+        const speed=Math.hypot(h.x-prev.x,h.y-prev.y)/dt;
+        if(speed>900 && h.y < p.hipY+30){
+          runnerPunchUntil=nowMs+280;
+        }
+      }
+      runnerPrevWrists[k]={x:h.x,y:h.y,t:nowMs};
+    });
+
+    if(action==="RUN" && nowMs<runnerPunchUntil)action="PUNCH";
+    runnerAction=action;
+    runnerActionEl.textContent=action;
+
+    // 通常姿勢中だけベース位置をゆっくり追従
+    if(action==="RUN" && nowMs>runnerPunchUntil){
+      runnerBaseline.shoulderY+=(p.shoulderY-runnerBaseline.shoulderY)*.012;
+      runnerBaseline.hipY+=(p.hipY-runnerBaseline.hipY)*.012;
+    }
+  }
 }
 function spawnBalloon(now){
   const baseR=Math.max(28,Math.min(52,innerWidth*.035)),special=Math.random()<.12,faceBalloon=!!playerFace&&Math.random()<.12;
@@ -486,10 +677,29 @@ function spawnBalloon(now){
   balloons.push({x:r+Math.random()*(innerWidth-r*2),y:-r,r,speed:faceBalloon?90:105+Math.random()*85,sway:18+Math.random()*32,phase:Math.random()*6.28,born:now,scale:.25,color:faceBalloon?"#7cefff":special?"#ffd84d":["#ff5470","#4dd7ff","#7fef9b"][Math.floor(Math.random()*3)],pts:faceBalloon?100:special?30:10,pop:false,faceBalloon});
 }
 function updateBalloon(now,dt){
-  if(now-lastSpawn>720){lastSpawn=now;spawnBalloon(now)}
+  if(now-lastSpawn>720){
+    lastSpawn=now;
+    spawnBalloon(now);
+  }
   balloons.forEach(b=>{
-    b.scale+=(1-b.scale)*Math.min(1,dt*7);b.y+=b.speed*dt;b.x+=Math.sin((now-b.born)*.0015+b.phase)*b.sway*dt;
-    hands.forEach(h=>{if(!b.pop&&Math.hypot(b.x-h.x,b.y-h.y)<b.r+h.r){b.pop=true;score+=b.pts;scoreEl.textContent=score;burst(b.x,b.y,b.color,20);popSound(b.pts>=30)}})
+    b.scale+=(1-b.scale)*Math.min(1,dt*7);
+    b.y+=b.speed*dt;
+    b.x+=Math.sin((now-b.born)*.0015+b.phase)*b.sway*dt;
+    hands.forEach(h=>{
+      if(!b.pop&&Math.hypot(b.x-h.x,b.y-h.y)<b.r+h.r){
+        b.pop=true;
+        const pts=b.pts;
+        if(balloonPlayerCount===2){
+          balloonScores[h.player]+=pts;
+          p1ScoreEl.textContent=balloonScores[0];
+          p2ScoreEl.textContent=balloonScores[1];
+          addFloat(b.x,b.y,`P${h.player+1} +${pts}`,h.player===0?"#72e9ff":"#ff8fe3");
+        }else{
+          score+=pts;scoreEl.textContent=score;
+        }
+        burst(b.x,b.y,b.color,20);popSound(b.pts>=30);
+      }
+    })
   });
   balloons=balloons.filter(b=>!b.pop&&b.y<innerHeight+b.r+20);
 }
@@ -587,6 +797,217 @@ function updateLaser(now,dt){
 }
 
 function addFloat(x,y,text,color){floatingTexts.push({x,y,text,color,age:0,life:.75})}
+
+function spawnRunnerObject(){
+  const roll=Math.random();
+  const type=roll<.36?"jump":roll<.68?"duck":"enemy";
+  runnerObjects.push({
+    type,z:1.02,resolved:false,hit:false,
+    wobble:Math.random()*6.28
+  });
+}
+
+function damageRunner(){
+  runnerLives=Math.max(0,runnerLives-1);
+  runnerLivesEl.textContent=runnerLives;
+  runnerShake=12;
+  tone(95,.16);setTimeout(()=>tone(65,.12),45);
+  addFloat(innerWidth/2,innerHeight*.64,"OUCH!","#ff6278");
+  if(runnerLives<=0)finish();
+}
+
+function clearRunnerObject(o,points,label){
+  if(o.resolved)return;
+  o.resolved=true;
+  score+=points;runnerCleared++;
+  scoreEl.textContent=Math.floor(score);
+  addFloat(innerWidth/2,innerHeight*.55,label,"#ffe66d");
+  tone(520,.07);
+}
+
+function updateRunner(now,dt){
+  runnerDistance+=dt*10;
+  score+=dt*8;
+  scoreEl.textContent=Math.floor(score);
+
+  if(now-runnerLastObstacle>1750){
+    runnerLastObstacle=now;
+    spawnRunnerObject();
+  }
+
+  const nowMs=performance.now();
+  runnerObjects.forEach(o=>{
+    o.z-=dt*(.30+Math.min(.13,runnerDistance*.001));
+
+    if(o.type==="enemy"&&!o.resolved&&o.z<.34&&nowMs<runnerPunchUntil){
+      clearRunnerObject(o,160,"PUNCH! +160");
+      burst(innerWidth/2,innerHeight*.55,"#8cff8c",24);
+    }
+
+    if(!o.resolved&&o.z<.12){
+      if(o.type==="jump"){
+        if(runnerAction==="JUMP")clearRunnerObject(o,120,"JUMP! +120");
+        else {o.resolved=true;damageRunner()}
+      }else if(o.type==="duck"){
+        if(runnerAction==="DUCK")clearRunnerObject(o,120,"DUCK! +120");
+        else {o.resolved=true;damageRunner()}
+      }else{
+        o.resolved=true;damageRunner();
+      }
+    }
+  });
+  runnerObjects=runnerObjects.filter(o=>o.z>-.12);
+  runnerShake*=.82;
+}
+
+function runnerPerspective(z){
+  const t=Math.max(0,Math.min(1,1-z));
+  const horizon=innerHeight*.28;
+  const ground=innerHeight*.93;
+  return {
+    t,
+    y:horizon+(ground-horizon)*Math.pow(t,1.35),
+    scale:.18+t*1.75
+  };
+}
+
+function drawRunnerWorld(now){
+  ctx.save();
+  const sx=(Math.random()-.5)*runnerShake,sy=(Math.random()-.5)*runnerShake;
+  ctx.translate(sx,sy);
+
+  // 空
+  ctx.fillStyle="#79c9ee";ctx.fillRect(-20,-20,innerWidth+40,innerHeight+40);
+
+  // 四角い雲
+  ctx.fillStyle="rgba(255,255,255,.82)";
+  const cloudShift=(runnerDistance*8)%innerWidth;
+  for(let i=-1;i<4;i++){
+    const x=i*innerWidth*.38-cloudShift*.15;
+    const y=70+(i%2)*55;
+    ctx.fillRect(x,y,120,34);ctx.fillRect(x+30,y-22,70,22);
+  }
+
+  const horizon=innerHeight*.28;
+  // 草地
+  ctx.fillStyle="#4c9b48";ctx.fillRect(0,horizon,innerWidth,innerHeight-horizon);
+
+  // 道（台形）
+  ctx.fillStyle="#8a7657";
+  ctx.beginPath();
+  ctx.moveTo(innerWidth*.46,horizon);
+  ctx.lineTo(innerWidth*.54,horizon);
+  ctx.lineTo(innerWidth*.78,innerHeight);
+  ctx.lineTo(innerWidth*.22,innerHeight);
+  ctx.closePath();ctx.fill();
+
+  // ブロック状の道グリッド
+  const phase=(runnerDistance*.18)%1;
+  for(let i=0;i<11;i++){
+    const z=(i/10+phase)%1;
+    const p=runnerPerspective(1-z);
+    const half=innerWidth*(.04+p.t*.25);
+    ctx.strokeStyle="rgba(70,55,40,.35)";
+    ctx.lineWidth=Math.max(1,p.scale*2);
+    ctx.beginPath();ctx.moveTo(innerWidth/2-half,p.y);ctx.lineTo(innerWidth/2+half,p.y);ctx.stroke();
+  }
+
+  // 左右のボクセル木
+  for(let side of [-1,1]){
+    for(let i=0;i<5;i++){
+      const z=((i/5+phase*.35)%1);
+      const p=runnerPerspective(1-z);
+      const x=innerWidth/2+side*(innerWidth*(.12+p.t*.35));
+      const s=18*p.scale;
+      ctx.fillStyle="#704b2e";ctx.fillRect(x-s*.25,p.y-s*1.7,s*.5,s*1.7);
+      ctx.fillStyle="#2f7e3b";ctx.fillRect(x-s,p.y-s*2.7,s*2,s*1.45);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawRunnerObjects(){
+  runnerObjects.slice().sort((a,b)=>b.z-a.z).forEach(o=>{
+    if(o.resolved&&o.type==="enemy")return;
+    const p=runnerPerspective(o.z);
+    const x=innerWidth/2;
+    const s=55*p.scale;
+    ctx.save();ctx.translate(x,p.y);
+
+    if(o.type==="jump"){
+      // 地面の壁：ジャンプ
+      ctx.fillStyle="#b66f35";ctx.strokeStyle="#613b21";ctx.lineWidth=Math.max(2,4*p.scale);
+      ctx.fillRect(-s,-s*.55,s*2,s*.55);ctx.strokeRect(-s,-s*.55,s*2,s*.55);
+      ctx.fillStyle="#d99753";
+      ctx.fillRect(-s*.85,-s*.48,s*.7,s*.18);ctx.fillRect(s*.12,-s*.48,s*.7,s*.18);
+      ctx.fillStyle="#fff";ctx.font=`900 ${Math.max(12,16*p.scale)}px system-ui`;ctx.textAlign="center";
+      ctx.fillText("JUMP",0,-s*.75);
+    }else if(o.type==="duck"){
+      // 頭上ゲート：しゃがむ
+      ctx.fillStyle="#686d78";
+      ctx.fillRect(-s*1.2,-s*2.0,s*.32,s*2.0);
+      ctx.fillRect(s*.88,-s*2.0,s*.32,s*2.0);
+      ctx.fillRect(-s*1.2,-s*2.0,s*2.4,s*.42);
+      ctx.fillStyle="#fff";ctx.font=`900 ${Math.max(12,16*p.scale)}px system-ui`;ctx.textAlign="center";
+      ctx.fillText("DUCK",0,-s*2.2);
+    }else{
+      // オリジナルのブロックモンスター
+      ctx.fillStyle=o.resolved?"#6a6a6a":"#4a9e52";
+      ctx.strokeStyle="#214725";ctx.lineWidth=Math.max(2,4*p.scale);
+      ctx.fillRect(-s*.75,-s*1.45,s*1.5,s*1.45);ctx.strokeRect(-s*.75,-s*1.45,s*1.5,s*1.45);
+      ctx.fillStyle="#152518";
+      ctx.fillRect(-s*.38,-s*1.05,s*.22,s*.22);ctx.fillRect(s*.16,-s*1.05,s*.22,s*.22);
+      ctx.fillRect(-s*.22,-s*.62,s*.44,s*.12);
+      ctx.fillStyle="#fff";ctx.font=`900 ${Math.max(12,16*p.scale)}px system-ui`;ctx.textAlign="center";
+      ctx.fillText("PUNCH",0,-s*1.7);
+    }
+    ctx.restore();
+  });
+}
+
+function drawRunnerAvatar(){
+  const pl=trackedPlayers[0];
+  const x=innerWidth/2,y=innerHeight*.84;
+  ctx.save();ctx.translate(x,y);
+
+  let bob=Math.sin(performance.now()/95)*4;
+  if(runnerAction==="JUMP")bob=-65;
+  if(runnerAction==="DUCK")bob=25;
+
+  ctx.translate(0,bob);
+  // ブロック型プレイヤー
+  const bodyH=runnerAction==="DUCK"?48:78;
+  ctx.fillStyle="#2b82c9";ctx.fillRect(-28,-bodyH,56,bodyH);
+  ctx.fillStyle="#e5b88a";ctx.fillRect(-25,-bodyH-48,50,48);
+
+  // 顔
+  ctx.fillStyle="#222";ctx.fillRect(-13,-bodyH-31,6,6);ctx.fillRect(7,-bodyH-31,6,6);
+  ctx.fillRect(-7,-bodyH-17,14,4);
+
+  // 腕
+  ctx.fillStyle=performance.now()<runnerPunchUntil?"#ffe66d":"#e5b88a";
+  if(runnerAction==="PUNCH"||performance.now()<runnerPunchUntil){
+    ctx.fillRect(25,-bodyH+8,65,16);
+    ctx.fillRect(-42,-bodyH+8,16,55);
+  }else{
+    ctx.fillRect(28,-bodyH+8,16,55);ctx.fillRect(-44,-bodyH+8,16,55);
+  }
+
+  // 足
+  if(runnerAction!=="DUCK"){
+    ctx.fillStyle="#343d53";ctx.fillRect(-24,0,18,48);ctx.fillRect(6,0,18,48);
+  }
+
+  // 顔写真があれば小さく頭に
+  if(playerFace){
+    ctx.save();ctx.beginPath();ctx.rect(-22,-bodyH-45,44,42);ctx.clip();
+    ctx.globalAlpha=.88;ctx.drawImage(playerFace,-22,-bodyH-45,44,44);ctx.restore();
+  }
+
+  ctx.restore();
+}
+
 function updateParticles(dt){
   floatingTexts.forEach(f=>{f.age+=dt;f.y-=45*dt});
   floatingTexts=floatingTexts.filter(f=>f.age<f.life);
@@ -650,143 +1071,51 @@ function drawBalloon(b){
   ctx.restore()
 }
 function drawBody(){
-  const by={};
-  bodyPoints.forEach(p=>by[p.i]=p);
+  const colors=[
+    {main:"rgba(80,220,255,.82)",light:"rgba(220,250,255,.9)",glow:"#56ddff",fill:"rgba(22,110,155,.36)"},
+    {main:"rgba(255,105,210,.82)",light:"rgba(255,225,248,.9)",glow:"#ff69d2",fill:"rgba(155,35,120,.34)"}
+  ];
 
-  const LShoulder=by[11], RShoulder=by[12];
-  const LElbow=by[13], RElbow=by[14];
-  const LHand=by[15], RHand=by[16];
+  trackedPlayers.slice(0,balloonPlayerCount).forEach((pl,index)=>{
+    const c=colors[index%2],by={};
+    pl.bodyPoints.forEach(p=>by[p.i]=p);
+    const LS=by[11],RS=by[12],LE=by[13],RE=by[14],LH=by[15],RH=by[16];
+    if(!LS||!RS)return;
 
-  ctx.save();
-  ctx.lineCap="round";
-  ctx.lineJoin="round";
-
-  // 腕：太めの発光ライン
-  const drawLimb=(a,b,width=22)=>{
-    if(!a||!b)return;
-    ctx.strokeStyle="rgba(80,220,255,.80)";
-    ctx.shadowColor="#56ddff";
-    ctx.shadowBlur=18;
-    ctx.lineWidth=width;
-    ctx.beginPath();
-    ctx.moveTo(a.x,a.y);
-    ctx.lineTo(b.x,b.y);
-    ctx.stroke();
-
-    ctx.strokeStyle="rgba(220,250,255,.85)";
-    ctx.shadowBlur=5;
-    ctx.lineWidth=Math.max(6,width*.28);
-    ctx.beginPath();
-    ctx.moveTo(a.x,a.y);
-    ctx.lineTo(b.x,b.y);
-    ctx.stroke();
-  };
-
-  drawLimb(LShoulder,LElbow,24);
-  drawLimb(LElbow,LHand,22);
-  drawLimb(RShoulder,RElbow,24);
-  drawLimb(RElbow,RHand,22);
-
-  // 胴体：肩の位置から簡易シルエット
-  if(LShoulder&&RShoulder){
-    const shoulderMid={
-      x:(LShoulder.x+RShoulder.x)/2,
-      y:(LShoulder.y+RShoulder.y)/2
+    ctx.save();ctx.lineCap="round";ctx.lineJoin="round";
+    const limb=(a,b,w)=>{
+      if(!a||!b)return;
+      ctx.strokeStyle=c.main;ctx.shadowColor=c.glow;ctx.shadowBlur=18;ctx.lineWidth=w;
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      ctx.strokeStyle=c.light;ctx.shadowBlur=4;ctx.lineWidth=Math.max(5,w*.26);
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
     };
-    const shoulderWidth=Math.max(70,Math.hypot(LShoulder.x-RShoulder.x,LShoulder.y-RShoulder.y));
-    const torsoH=Math.min(220,Math.max(130,shoulderWidth*1.35));
+    limb(LS,LE,22);limb(LE,LH,20);limb(RS,RE,22);limb(RE,RH,20);
 
-    const leftWaist={x:shoulderMid.x-shoulderWidth*.30,y:shoulderMid.y+torsoH};
-    const rightWaist={x:shoulderMid.x+shoulderWidth*.30,y:shoulderMid.y+torsoH};
-
-    // 胴体外側
-    ctx.shadowColor="#36d9ff";
-    ctx.shadowBlur=24;
-    ctx.fillStyle="rgba(22,110,155,.36)";
-    ctx.strokeStyle="rgba(105,235,255,.88)";
-    ctx.lineWidth=5;
-
+    const mid={x:(LS.x+RS.x)/2,y:(LS.y+RS.y)/2};
+    const sw=Math.max(65,Math.hypot(LS.x-RS.x,LS.y-RS.y));
+    const torsoH=Math.min(210,Math.max(115,sw*1.25));
+    ctx.fillStyle=c.fill;ctx.strokeStyle=c.main;ctx.lineWidth=5;ctx.shadowColor=c.glow;ctx.shadowBlur=20;
     ctx.beginPath();
-    ctx.moveTo(LShoulder.x,LShoulder.y);
-    ctx.quadraticCurveTo(
-      shoulderMid.x-shoulderWidth*.36,
-      shoulderMid.y+torsoH*.52,
-      leftWaist.x,leftWaist.y
-    );
-    ctx.lineTo(rightWaist.x,rightWaist.y);
-    ctx.quadraticCurveTo(
-      shoulderMid.x+shoulderWidth*.36,
-      shoulderMid.y+torsoH*.52,
-      RShoulder.x,RShoulder.y
-    );
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.moveTo(LS.x,LS.y);
+    ctx.lineTo(mid.x-sw*.28,mid.y+torsoH);
+    ctx.lineTo(mid.x+sw*.28,mid.y+torsoH);
+    ctx.lineTo(RS.x,RS.y);ctx.closePath();ctx.fill();ctx.stroke();
 
-    // 胸部の発光ライン
-    ctx.shadowBlur=8;
-    ctx.strokeStyle="rgba(185,248,255,.65)";
-    ctx.lineWidth=3;
-    ctx.beginPath();
-    ctx.moveTo(LShoulder.x,LShoulder.y);
-    ctx.lineTo(RShoulder.x,RShoulder.y);
-    ctx.stroke();
+    const headR=Math.min(50,Math.max(30,sw*.27)),headY=mid.y-headR*1.45;
+    ctx.beginPath();ctx.arc(mid.x,headY,headR,0,Math.PI*2);ctx.fill();ctx.stroke();
 
-    // 頭
-    const headR=Math.min(56,Math.max(34,shoulderWidth*.28));
-    const headY=shoulderMid.y-headR*1.5;
-
-    ctx.shadowColor="#4de6ff";
-    ctx.shadowBlur=22;
-    ctx.fillStyle="rgba(25,125,170,.42)";
-    ctx.strokeStyle="rgba(135,245,255,.92)";
-    ctx.lineWidth=5;
-    ctx.beginPath();
-    ctx.arc(shoulderMid.x,headY,headR,0,Math.PI*2);
-    ctx.fill();
-    ctx.stroke();
-
-    // 顔の方向がわかる程度の簡易フェイス
-    ctx.shadowBlur=0;
-    ctx.fillStyle="rgba(225,255,255,.9)";
-    ctx.beginPath();
-    ctx.arc(shoulderMid.x-headR*.32,headY-headR*.05,4.5,0,Math.PI*2);
-    ctx.arc(shoulderMid.x+headR*.32,headY-headR*.05,4.5,0,Math.PI*2);
-    ctx.fill();
-
-    ctx.strokeStyle="rgba(225,255,255,.65)";
-    ctx.lineWidth=3;
-    ctx.beginPath();
-    ctx.arc(shoulderMid.x,headY+headR*.12,headR*.28,.1*Math.PI,.9*Math.PI);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-
-  // 手はゲーム上重要なので大きめに強調
-  hands.forEach(h=>{
-    const g=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,h.r);
-    g.addColorStop(0,"rgba(255,255,255,1)");
-    g.addColorStop(.22,"rgba(87,220,255,.95)");
-    g.addColorStop(.55,"rgba(87,220,255,.32)");
-    g.addColorStop(1,"rgba(87,220,255,0)");
-    ctx.fillStyle=g;
-    ctx.beginPath();
-    ctx.arc(h.x,h.y,h.r,0,Math.PI*2);
-    ctx.fill();
-
-    ctx.save();
-    ctx.strokeStyle="rgba(255,255,255,.92)";
-    ctx.shadowColor="#56ddff";
-    ctx.shadowBlur=14;
-    ctx.lineWidth=3;
-    ctx.beginPath();
-    ctx.arc(h.x,h.y,20,0,Math.PI*2);
-    ctx.stroke();
+    ctx.shadowBlur=0;ctx.fillStyle="#fff";ctx.font="900 18px system-ui";ctx.textAlign="center";
+    ctx.fillText(`P${index+1}`,mid.x,headY+6);
     ctx.restore();
+
+    pl.hands.forEach(h=>{
+      const g=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,h.r);
+      g.addColorStop(0,"#fff");g.addColorStop(.25,c.main);g.addColorStop(1,"rgba(255,255,255,0)");
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();
+    });
   });
-}
-function drawEnemy(e){
+}function drawEnemy(e){
   ctx.save();ctx.translate(e.x,e.y);
 
   const glow=e.type==="faceboss"?"#7cefff":e.type==="scout"?"#ff5fd1":e.type==="heavy"?"#ffb347":"#ff334c";
@@ -854,10 +1183,21 @@ function drawParticles(){
 function finish(){
   if(!gameStarted)return;
   gameStarted=false;
-  $("resultScore").textContent=`SCORE ${score}`;
-  $("resultText").innerHTML=mode==="laser"
-    ? `MAX COMBO：<strong>${maxCombo}</strong>　／　反射：<strong>${shotsDeflected}</strong>　／　撃破：<strong>${enemiesDestroyed}</strong>`
-    : "もう一度挑戦してハイスコアを目指そう！";
+
+  if(mode==="balloon"&&balloonPlayerCount===2){
+    const a=balloonScores[0],b=balloonScores[1];
+    $("resultScore").textContent=`P1 ${a}  -  ${b} P2`;
+    $("resultText").innerHTML=a===b?"DRAW!":a>b?"🏆 PLAYER 1 WIN!":"🏆 PLAYER 2 WIN!";
+  }else{
+    $("resultScore").textContent=`SCORE ${Math.floor(score)}`;
+    if(mode==="laser"){
+      $("resultText").innerHTML=`MAX COMBO：<strong>${maxCombo}</strong>　／　反射：<strong>${shotsDeflected}</strong>　／　撃破：<strong>${enemiesDestroyed}</strong>`;
+    }else if(mode==="runner"){
+      $("resultText").innerHTML=`突破：<strong>${runnerCleared}</strong>　／　走行：<strong>${runnerDistance.toFixed(0)}m</strong>`;
+    }else{
+      $("resultText").textContent="もう一度挑戦してハイスコアを目指そう！";
+    }
+  }
   showScreen(resultScreen);
 }
 
