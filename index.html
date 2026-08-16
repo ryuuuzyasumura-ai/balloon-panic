@@ -82,7 +82,7 @@ button:disabled{opacity:.5}
 </head>
 <body>
 <div id="app">
-  <div id="versionBadge">Ver. 0.8 STABLE</div>
+  <div id="versionBadge">Ver. 0.9 FIX</div>
   <div id="debugBox"></div>
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
@@ -118,7 +118,7 @@ button:disabled{opacity:.5}
   <div class="overlay" id="menuOverlay">
     <div class="card">
       <h2>MOTION ARCADE</h2>
-      <p>カメラを使って体を動かして遊ぶ体感ゲーム<br><span style="font-size:12px;opacity:.65">Ver. 0.8 STABLE</span></p>
+      <p>カメラを使って体を動かして遊ぶ体感ゲーム<br><span style="font-size:12px;opacity:.65">Ver. 0.9 FIX</span></p>
       <div class="modeGrid">
         <div class="modeCard balloon" id="balloonMode">
           <div class="modeIcon">🎈</div>
@@ -131,7 +131,7 @@ button:disabled{opacity:.5}
           <p>実物の発光ライトセーバーで<br>敵のレーザーを跳ね返せ！</p>
         </div>
       </div>
-      <p class="small" style="margin-top:22px">※ カメラ映像の処理はブラウザ内で行います。<br><span id="jsReady">APP READY ✓</span></p>
+      <p class="small" style="margin-top:22px">※ カメラ映像の処理はブラウザ内で行います。<br><span id="jsReady">APP READY ✓ / MENU READY ✓</span></p>
     </div>
   </div>
 
@@ -170,12 +170,18 @@ button:disabled{opacity:.5}
 </div>
 
 <script type="module">
-const APP_VERSION="0.8 STABLE";
+const APP_VERSION="0.9 FIX";
 const video=document.getElementById("video"),canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 const debugBox=document.getElementById("debugBox");
 document.getElementById("versionBadge").textContent="Ver. "+APP_VERSION;
 const hud=document.getElementById("hud"),menuOverlay=document.getElementById("menuOverlay"),cameraOverlay=document.getElementById("cameraOverlay"),
 calOverlay=document.getElementById("calOverlay"),resultOverlay=document.getElementById("resultOverlay");
+const cameraBtn=document.getElementById("cameraBtn");
+const calBtn=document.getElementById("calBtn");
+const skipBtn=document.getElementById("skipBtn");
+const balloonModeBtn=document.getElementById("balloonMode");
+const laserModeBtn=document.getElementById("laserMode");
+
 const scoreEl=document.getElementById("score"),comboEl=document.getElementById("combo"),comboWrap=document.getElementById("comboWrap"),
 timeEl=document.getElementById("time"),statusEl=document.getElementById("status"),gameTitle=document.getElementById("gameTitle"),
 gameSubtitle=document.getElementById("gameSubtitle"),detect=document.getElementById("detect"),detText=document.getElementById("detText"),
@@ -227,8 +233,8 @@ function resize(){
 }
 addEventListener("resize",resize);resize();
 
-document.getElementById("balloonMode").onclick=()=>chooseMode("balloon");
-document.getElementById("laserMode").onclick=()=>chooseMode("laser");
+balloonModeBtn.onclick=()=>chooseMode("balloon");
+laserModeBtn.onclick=()=>chooseMode("laser");
 document.getElementById("backBtn").onclick=()=>showMenu();
 document.getElementById("menuBtn").onclick=()=>showMenu();
 document.getElementById("againBtn").onclick=()=>restartSameMode();
@@ -252,7 +258,7 @@ function chooseMode(m){
  }
 }
 
-document.getElementById("cameraBtn").onclick=async()=>{
+cameraBtn.onclick=async()=>{
  cameraBtn.disabled=true;
  errorEl.textContent="";
  try{
@@ -297,7 +303,7 @@ document.getElementById("cameraBtn").onclick=async()=>{
  }
 };
 
-document.getElementById("calBtn").onclick=()=>{
+calBtn.onclick=()=>{
  clearDebugError();
  if(saber.valid){
    const h=sampleHueNearSegment(saber);
@@ -305,7 +311,7 @@ document.getElementById("calBtn").onclick=()=>{
  }
  calOverlay.style.display="none";startGame();
 };
-document.getElementById("skipBtn").onclick=()=>{clearDebugError();calOverlay.style.display="none";startGame()};
+skipBtn.onclick=()=>{clearDebugError();calOverlay.style.display="none";startGame()};
 
 async function loadMediaPipe(){
  if(FilesetResolverClass && PoseLandmarkerClass)return;
