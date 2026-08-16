@@ -1,934 +1,394 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MOTION ARCADE</title>
 <style>
-:root{
-  --cyan:#45e7ff;--red:#ff3f5b;--gold:#ffd25f;--blue:#2d8cff;
-  --panel:rgba(3,14,28,.82);--line:rgba(69,231,255,.62)
-}
+:root{--cyan:#48e5ff;--gold:#ffd45f;--red:#ff405a;--bg:#020712}
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020711;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
-#app{position:relative;width:100vw;height:100vh;background:#020711}
-video{display:none}
-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-.hud{position:absolute;inset:0;pointer-events:none}
-.top{position:absolute;left:20px;right:20px;top:18px;display:flex;justify-content:space-between;align-items:flex-start}
-.box{background:var(--panel);border:1px solid var(--line);padding:14px 18px;min-width:210px;box-shadow:0 0 24px rgba(69,231,255,.12)}
-.label{font-size:13px;color:#79eaff;font-weight:900;letter-spacing:.12em}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+#app{position:relative;width:100vw;height:100vh}
+#video{display:none}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block}
+.screen{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at center,rgba(11,35,69,.80),rgba(2,7,18,.97));z-index:20}
+.screen.active{display:flex}
+.card{width:min(920px,94vw);padding:38px 34px;text-align:center;background:rgba(3,13,27,.96);border:1px solid rgba(72,229,255,.58);box-shadow:0 30px 100px rgba(0,0,0,.45)}
+.card h1,.card h2{margin:0 0 12px;letter-spacing:.06em}
+.card h1{font-size:clamp(42px,7vw,84px)}
+.card h2{font-size:clamp(34px,6vw,64px)}
+.card p{color:#dcecff;line-height:1.65}
+.modeGrid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:28px}
+.mode{border:1px solid rgba(255,255,255,.18);padding:26px;background:linear-gradient(180deg,rgba(20,42,74,.95),rgba(4,13,27,.96));cursor:pointer;transition:.18s;min-height:260px}
+.mode:hover{transform:translateY(-4px);filter:brightness(1.08)}
+.mode .icon{font-size:82px;line-height:1}
+.mode h3{font-size:30px;margin:14px 0 8px}
+.mode p{font-size:15px;margin:0}
+button{border:1px solid #7ceeff;background:linear-gradient(#163b61,#07182c);color:#fff;border-radius:999px;padding:15px 28px;font-size:20px;font-weight:900;cursor:pointer;min-width:190px}
+button:disabled{opacity:.45;cursor:wait}
+.row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+#hud{position:absolute;inset:0;display:none;pointer-events:none;z-index:10}
+.hudbox{position:absolute;background:rgba(3,14,28,.78);border:1px solid rgba(72,229,255,.65);padding:14px 18px;min-width:190px}
+#scoreBox{left:18px;top:18px}
+#timeBox{right:18px;top:18px;text-align:center}
+.label{font-size:12px;color:#7deaff;font-weight:900;letter-spacing:.12em}
 .big{font-size:46px;font-weight:950;line-height:1}
-.centerTitle{position:absolute;top:12px;left:50%;transform:translateX(-50%);text-align:center;width:min(50vw,760px)}
-.centerTitle h1{margin:0;font-size:clamp(34px,5vw,68px);letter-spacing:.08em;text-shadow:0 0 18px rgba(90,180,255,.8)}
-.centerTitle p{margin:4px 0 0;color:#d9ecff;font-weight:700}
-#status{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);padding:10px 16px;background:rgba(0,0,0,.58);border:1px solid rgba(255,210,95,.6);font-weight:800;white-space:nowrap}
-#detect{position:absolute;right:18px;bottom:18px;min-width:250px}
-#backBtn{position:absolute;left:18px;bottom:18px;pointer-events:auto}
-button{border:1px solid #75edff;background:linear-gradient(180deg,#15395f,#07172b);color:#fff;border-radius:999px;padding:15px 28px;font-size:20px;font-weight:950;cursor:pointer;min-width:180px}
-button:hover{filter:brightness(1.12)}
-button:disabled{opacity:.5}
-.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at center,rgba(13,34,68,.72),rgba(2,7,17,.96));padding:20px}
-.card{width:min(860px,94vw);padding:38px 34px;text-align:center;background:rgba(3,13,27,.95);border:1px solid rgba(69,231,255,.55);box-shadow:0 30px 100px rgba(0,0,0,.48),0 0 40px rgba(80,160,255,.14)}
-.card h2{font-size:clamp(38px,7vw,78px);margin:0 0 10px;letter-spacing:.06em}
-.card p{color:#dcecff;line-height:1.7;font-size:18px}
-.modeGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin-top:28px}
-.modeCard{position:relative;overflow:hidden;min-height:260px;padding:26px 24px;border:1px solid rgba(255,255,255,.15);background:linear-gradient(180deg,rgba(16,37,67,.92),rgba(4,12,25,.96));cursor:pointer;transition:.2s transform,.2s filter}
-.modeCard:hover{transform:translateY(-4px);filter:brightness(1.08)}
-.modeIcon{font-size:78px;line-height:1;margin-bottom:16px}
-.modeCard h3{font-size:30px;margin:0 0 8px}
-.modeCard p{font-size:15px;margin:0;color:#cfe4ff}
-.modeCard.laser{box-shadow:inset 0 0 60px rgba(45,140,255,.13)}
-.modeCard.balloon{box-shadow:inset 0 0 60px rgba(255,84,112,.11)}
-.small{font-size:13px;opacity:.76}
-.swatch{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.18);padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.05);font-size:14px}
+#titleHud{position:absolute;top:14px;left:50%;transform:translateX(-50%);text-align:center;width:60vw}
+#titleHud h2{margin:0;font-size:clamp(34px,5vw,66px);letter-spacing:.08em;text-shadow:0 0 20px rgba(90,180,255,.75)}
+#titleHud p{margin:3px 0;font-weight:700}
+#status{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(0,0,0,.58);border:1px solid rgba(255,212,95,.65);padding:9px 14px;font-weight:800;white-space:nowrap}
+#backBtn{position:absolute;left:18px;bottom:18px;pointer-events:auto;min-width:0;padding:10px 18px;font-size:16px}
+#detectBox{right:18px;bottom:18px;display:none}
+#version{position:absolute;right:18px;top:108px;z-index:40;background:rgba(0,0,0,.60);border:1px solid rgba(255,255,255,.22);padding:6px 10px;border-radius:8px;color:#c8f4ff;font-size:12px;font-weight:900}
+#debug{position:absolute;left:50%;bottom:72px;transform:translateX(-50%);z-index:50;width:min(900px,92vw);display:none;background:rgba(100,0,0,.88);border:1px solid #ff8b8b;padding:10px 14px;font:700 12px/1.4 ui-monospace,monospace;white-space:pre-wrap}
+.small{font-size:13px!important;opacity:.72}
+.swatch{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border:1px solid rgba(255,255,255,.18);border-radius:999px}
 .dot{width:18px;height:18px;border-radius:50%;background:#5fe6ff}
-#cameraOverlay,#calOverlay,#resultOverlay{display:none}
-@media(max-width:760px){.modeGrid{grid-template-columns:1fr}.modeCard{min-height:210px}.centerTitle{top:100px;width:80vw}.box{min-width:150px}}
-
-#versionBadge{
-  position:absolute;
-  right:18px;
-  top:104px;
-  z-index:30;
-  padding:6px 10px;
-  border:1px solid rgba(255,255,255,.22);
-  background:rgba(0,0,0,.55);
-  color:#bfefff;
-  font-size:12px;
-  font-weight:900;
-  letter-spacing:.08em;
-  border-radius:8px;
-  pointer-events:none;
-}
-#debugBox{
-  position:absolute;
-  left:50%;
-  bottom:72px;
-  transform:translateX(-50%);
-  z-index:40;
-  width:min(900px,92vw);
-  padding:10px 14px;
-  background:rgba(90,0,0,.86);
-  border:1px solid rgba(255,130,130,.8);
-  color:#fff;
-  font:700 13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;
-  white-space:pre-wrap;
-  display:none;
-  pointer-events:none;
-}
+@media(max-width:760px){.modeGrid{grid-template-columns:1fr}.mode{min-height:210px}#titleHud{top:96px;width:86vw}}
 </style>
-
 </head>
 <body>
 <div id="app">
-  <div id="versionBadge">Ver. 0.9 FIX</div>
-  <div id="debugBox"></div>
   <video id="video" autoplay muted playsinline></video>
   <canvas id="game"></canvas>
+  <div id="version">Ver. 1.0 CLEAN</div>
+  <div id="debug"></div>
 
-  <div class="hud" id="hud" style="display:none">
-    <div class="top">
-      <div class="box">
-        <div class="label">SCORE</div>
-        <div class="big" id="score">0</div>
-        <div id="comboWrap" style="color:var(--gold);font-weight:900;margin-top:6px">COMBO × <span id="combo">0</span></div>
-      </div>
-      <div class="box" style="text-align:center">
-        <div class="label">TIME</div>
-        <div class="big"><span id="time">30</span><span style="font-size:.45em"> 秒</span></div>
-      </div>
+  <div id="hud">
+    <div id="scoreBox" class="hudbox">
+      <div class="label">SCORE</div>
+      <div id="score" class="big">0</div>
+      <div id="comboWrap" style="color:var(--gold);font-weight:900">COMBO × <span id="combo">0</span></div>
     </div>
-
-    <div class="centerTitle">
-      <h1 id="gameTitle">MOTION ARCADE</h1>
-      <p id="gameSubtitle"></p>
+    <div id="timeBox" class="hudbox">
+      <div class="label">TIME</div>
+      <div class="big"><span id="time">30</span><span style="font-size:.42em"> 秒</span></div>
     </div>
-
-    <div id="detect" class="box" style="display:none">
+    <div id="titleHud"><h2 id="gameTitle"></h2><p id="gameSubtitle"></p></div>
+    <div id="detectBox" class="hudbox">
       <div class="label">SABER DETECTION</div>
-      <div style="font-size:24px;font-weight:950;margin-top:4px"><span id="detText">SEARCHING</span></div>
-      <div style="font-size:13px;margin-top:5px">信頼度 <span id="confidence">0</span>%</div>
+      <div style="font-size:22px;font-weight:950" id="detText">SEARCHING</div>
+      <div style="font-size:12px">信頼度 <span id="confidence">0</span>%</div>
     </div>
-
     <button id="backBtn">← モード選択</button>
-    <div id="status">準備中…</div>
+    <div id="status"></div>
   </div>
 
-  <div class="overlay" id="menuOverlay">
+  <section id="menu" class="screen active">
     <div class="card">
-      <h2>MOTION ARCADE</h2>
-      <p>カメラを使って体を動かして遊ぶ体感ゲーム<br><span style="font-size:12px;opacity:.65">Ver. 0.9 FIX</span></p>
+      <h1>MOTION ARCADE</h1>
+      <p>カメラを使って体を動かして遊ぶ体感ゲーム</p>
       <div class="modeGrid">
-        <div class="modeCard balloon" id="balloonMode">
-          <div class="modeIcon">🎈</div>
+        <div id="chooseBalloon" class="mode">
+          <div class="icon">🎈</div>
           <h3>BALLOON PANIC</h3>
           <p>両手で風船を割ろう！<br>30秒でハイスコアを目指せ。</p>
         </div>
-        <div class="modeCard laser" id="laserMode">
-          <div class="modeIcon">⚔️</div>
+        <div id="chooseLaser" class="mode">
+          <div class="icon">⚔️</div>
           <h3>LASER GUARD</h3>
           <p>実物の発光ライトセーバーで<br>敵のレーザーを跳ね返せ！</p>
         </div>
       </div>
-      <p class="small" style="margin-top:22px">※ カメラ映像の処理はブラウザ内で行います。<br><span id="jsReady">APP READY ✓ / MENU READY ✓</span></p>
+      <p class="small">APP READY ✓ / Ver. 1.0 CLEAN</p>
     </div>
-  </div>
+  </section>
 
-  <div class="overlay" id="cameraOverlay">
+  <section id="cameraScreen" class="screen">
     <div class="card">
-      <h2 id="cameraTitle">CAMERA</h2>
+      <h2 id="cameraTitle"></h2>
       <p id="cameraText"></p>
       <button id="cameraBtn">カメラを起動</button>
-      <div id="error" style="color:#ffb8c1;margin-top:12px"></div>
+      <p id="cameraError" style="color:#ffb6c0"></p>
     </div>
-  </div>
+  </section>
 
-  <div class="overlay" id="calOverlay">
+  <section id="calScreen" class="screen">
     <div class="card">
       <h2>CALIBRATION</h2>
-      <p>ライトセーバーを<strong>青色</strong>で点灯し、<br>カメラに全体が映るように画面中央付近でゆっくり動かしてください。</p>
-      <div class="swatch"><span class="dot" id="swatchDot"></span><span id="swatchText">青色設定</span></div>
-      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:18px">
-        <button id="calBtn">この色を覚えて開始</button>
-        <button id="skipBtn">青色設定で開始</button>
+      <p>ライトセーバーを<strong>青色</strong>で点灯し、カメラに全体が映るようにゆっくり動かしてください。</p>
+      <div class="swatch"><span id="swatchDot" class="dot"></span><span id="swatchText">青色設定</span></div>
+      <div class="row">
+        <button id="rememberColor">この色を覚えて開始</button>
+        <button id="startBlue">青色設定で開始</button>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="overlay" id="resultOverlay">
+  <section id="resultScreen" class="screen">
     <div class="card">
       <h2>FINISH!</h2>
-      <p id="resultScore" style="font-size:54px;font-weight:950;margin:10px 0"></p>
+      <p id="resultScore" style="font-size:54px;font-weight:950;margin:10px"></p>
       <p id="resultText"></p>
-      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <div class="row">
         <button id="againBtn">もう一度</button>
         <button id="menuBtn">モード選択</button>
       </div>
     </div>
-  </div>
+  </section>
 </div>
 
-<script type="module">
-const APP_VERSION="0.9 FIX";
-const video=document.getElementById("video"),canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
-const debugBox=document.getElementById("debugBox");
-document.getElementById("versionBadge").textContent="Ver. "+APP_VERSION;
-const hud=document.getElementById("hud"),menuOverlay=document.getElementById("menuOverlay"),cameraOverlay=document.getElementById("cameraOverlay"),
-calOverlay=document.getElementById("calOverlay"),resultOverlay=document.getElementById("resultOverlay");
-const cameraBtn=document.getElementById("cameraBtn");
-const calBtn=document.getElementById("calBtn");
-const skipBtn=document.getElementById("skipBtn");
-const balloonModeBtn=document.getElementById("balloonMode");
-const laserModeBtn=document.getElementById("laserMode");
+<script>
+(function(){
+"use strict";
 
-const scoreEl=document.getElementById("score"),comboEl=document.getElementById("combo"),comboWrap=document.getElementById("comboWrap"),
-timeEl=document.getElementById("time"),statusEl=document.getElementById("status"),gameTitle=document.getElementById("gameTitle"),
-gameSubtitle=document.getElementById("gameSubtitle"),detect=document.getElementById("detect"),detText=document.getElementById("detText"),
-confidenceEl=document.getElementById("confidence"),errorEl=document.getElementById("error"),cameraTitle=document.getElementById("cameraTitle"),
-cameraText=document.getElementById("cameraText"),swatchDot=document.getElementById("swatchDot"),swatchText=document.getElementById("swatchText"),
-resultScore=document.getElementById("resultScore"),resultText=document.getElementById("resultText");
+const VERSION="1.0 CLEAN";
+const $=id=>document.getElementById(id);
+const video=$("video"),canvas=$("game"),ctx=canvas.getContext("2d");
+const menu=$("menu"),cameraScreen=$("cameraScreen"),calScreen=$("calScreen"),resultScreen=$("resultScreen");
+const hud=$("hud"),debug=$("debug");
+const chooseBalloon=$("chooseBalloon"),chooseLaser=$("chooseLaser"),cameraBtn=$("cameraBtn");
+const scoreEl=$("score"),comboEl=$("combo"),timeEl=$("time"),statusEl=$("status");
+const gameTitle=$("gameTitle"),gameSubtitle=$("gameSubtitle"),comboWrap=$("comboWrap"),detectBox=$("detectBox");
+const detText=$("detText"),confidenceEl=$("confidence"),cameraTitle=$("cameraTitle"),cameraText=$("cameraText"),cameraError=$("cameraError");
 
-let mode=null,stream=null,running=false,gameStarted=false,gameEnded=false,pose=null,lastVideoTime=-1;
-let FilesetResolverClass=null;
-let PoseLandmarkerClass=null;
-let mediaPipeModulePromise=null;
-let score=0,combo=0,startAt=0,duration=30,last=0,lastSpawn=0;
-let enemies=[],bolts=[],particles=[],balloons=[],hands=[];
+let mode=null,stream=null,running=false,gameStarted=false,gameEnded=false;
+let score=0,combo=0,startAt=0,lastFrame=0,lastSpawn=0,duration=30;
+let balloons=[],hands=[],bodyPoints=[],particles=[],enemies=[],bolts=[];
+let audioCtx=null;
+let pose=null,lastVideoTime=-1,lastPoseAt=0;
+let MP=null;
 let saber={valid:false,x1:0,y1:0,x2:0,y2:0,confidence:0};
-let audioCtx=null,targetHue=205,hueTolerance=28,minSat=.38,minVal=.42;
+let targetHue=205,lastSaberAt=0;
+const small=document.createElement("canvas"); small.width=320; small.height=180;
+const sctx=small.getContext("2d",{willReadFrequently:true});
+let smoothHands=[null,null],saberTrail=[];
 
-// カメラ解析と描画を分離してフリーズを防ぐ
-let lastPoseDetectAt=0;
-let lastSaberDetectAt=0;
-const POSE_INTERVAL=66;   // 約15fps
-const SABER_INTERVAL=50;  // 約20fps
-let runtimeErrorCount=0;
-let lastRuntimeError="";
-let lastRuntimeStack="";
-
-function showDebugError(err, where="GAME LOOP"){
-  const msg = err && err.message ? err.message : String(err);
-  const name = err && err.name ? err.name : "Error";
-  const stack = err && err.stack ? String(err.stack).split("\n").slice(0,4).join("\n") : "";
-  lastRuntimeError=`${where}: ${name}: ${msg}`;
-  lastRuntimeStack=stack;
-  debugBox.style.display="block";
-  debugBox.textContent=`Ver. ${APP_VERSION}\n${lastRuntimeError}${stack ? "\n"+stack : ""}`;
+function showError(err,where){
+  console.error(where,err);
+  debug.style.display="block";
+  debug.textContent=`Ver. ${VERSION}\n${where}: ${err?.name||"Error"}: ${err?.message||String(err)}`;
 }
-
-function clearDebugError(){
-  runtimeErrorCount=0;
-  lastRuntimeError="";
-  lastRuntimeStack="";
-  debugBox.style.display="none";
-  debugBox.textContent="";
+function clearError(){debug.style.display="none";debug.textContent=""}
+function showScreen(el){
+  [menu,cameraScreen,calScreen,resultScreen].forEach(s=>s.classList.remove("active"));
+  if(el)el.classList.add("active");
 }
-
 function resize(){
- const dpr=Math.min(devicePixelRatio||1,2);
- canvas.width=innerWidth*dpr;canvas.height=innerHeight*dpr;
- canvas.style.width=innerWidth+"px";canvas.style.height=innerHeight+"px";
- ctx.setTransform(dpr,0,0,dpr,0,0);
+  const dpr=Math.min(devicePixelRatio||1,2);
+  canvas.width=Math.floor(innerWidth*dpr);canvas.height=Math.floor(innerHeight*dpr);
+  canvas.style.width=innerWidth+"px";canvas.style.height=innerHeight+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 addEventListener("resize",resize);resize();
 
-balloonModeBtn.onclick=()=>chooseMode("balloon");
-laserModeBtn.onclick=()=>chooseMode("laser");
-document.getElementById("backBtn").onclick=()=>showMenu();
-document.getElementById("menuBtn").onclick=()=>showMenu();
-document.getElementById("againBtn").onclick=()=>restartSameMode();
+chooseBalloon.addEventListener("click",()=>selectMode("balloon"));
+chooseLaser.addEventListener("click",()=>selectMode("laser"));
+$("backBtn").addEventListener("click",goMenu);
+$("menuBtn").addEventListener("click",goMenu);
+$("againBtn").addEventListener("click",()=>{
+  resultScreen.classList.remove("active");
+  if(mode==="laser")showScreen(calScreen); else beginGame();
+});
+$("rememberColor").addEventListener("click",()=>{
+  const h=sampleHue();
+  if(h!=null){targetHue=h;$("swatchDot").style.background=`hsl(${h} 100% 60%)`;$("swatchText").textContent=`Hue ${Math.round(h)}°`}
+  showScreen(null);beginGame();
+});
+$("startBlue").addEventListener("click",()=>{targetHue=205;showScreen(null);beginGame()});
 
-function chooseMode(m){
- mode=m;
- clearDebugError();
- menuOverlay.style.display="none";
- cameraOverlay.style.display="flex";
- errorEl.textContent="";
- cameraBtn.disabled=false;
- cameraBtn.style.display="";
- if(m==="balloon"){
-   cameraBtn.textContent="カメラを起動";
-   cameraTitle.textContent="BALLOON PANIC";
-   cameraText.innerHTML="カメラの前に立って、両手で風船を割ろう！";
- }else{
-   cameraBtn.textContent="カメラを起動";
-   cameraTitle.textContent="LASER GUARD";
-   cameraText.innerHTML="発光ライトセーバーを準備してください。<br>青色で始めるのがおすすめです。";
- }
+function selectMode(m){
+  clearError();mode=m;
+  cameraTitle.textContent=m==="balloon"?"BALLOON PANIC":"LASER GUARD";
+  cameraText.innerHTML=m==="balloon"?"カメラの前に立って、両手で風船を割ろう！":"発光ライトセーバーを準備してください。<br>青色で始めるのがおすすめです。";
+  cameraError.textContent="";
+  cameraBtn.disabled=false;
+  showScreen(cameraScreen);
 }
 
-cameraBtn.onclick=async()=>{
- cameraBtn.disabled=true;
- errorEl.textContent="";
- try{
-   if(!stream){
-     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:1280},height:{ideal:720}},audio:false});
-     video.srcObject=stream;await video.play();
-     audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-   }
-   if(!running){
-     running=true;
-     last=0;
-     requestAnimationFrame(loop);
-   }
-   cameraOverlay.style.display="none";
-   if(mode==="laser"){
-     cameraBtn.disabled=false;
-     calOverlay.style.display="flex";
-   }else{
-     cameraOverlay.style.display="flex";
-     cameraTitle.textContent="LOADING...";
-     cameraText.innerHTML="人体認識AIを準備しています。<br>初回のみ数秒かかることがあります。";
-     try{
-       await initPose();
-       cameraOverlay.style.display="none";
-       cameraBtn.disabled=false;
-       startGame();
-     }catch(err){
-       console.error("MediaPipe load/init error",err);
-       cameraBtn.disabled=false;
-       cameraTitle.textContent="BALLOON PANIC";
-       cameraText.innerHTML="人体認識AIを読み込めませんでした。<br>通信状態を確認して、もう一度お試しください。";
-       errorEl.textContent=(err && err.message) ? err.message : "人体認識AIの読み込みに失敗しました。";
-       showDebugError(err,"MEDIAPIPE INIT");
-     }
-   }
- }catch(e){
-   console.error(e);
-   cameraBtn.disabled=false;
-   cameraOverlay.style.display="flex";
-   errorEl.textContent="カメラを起動できませんでした。Chromeのカメラ許可を確認してください。";
-   showDebugError(e,"CAMERA START");
- }
-};
-
-calBtn.onclick=()=>{
- clearDebugError();
- if(saber.valid){
-   const h=sampleHueNearSegment(saber);
-   if(h!=null){targetHue=h;swatchDot.style.background=`hsl(${Math.round(h)} 100% 60%)`;swatchText.textContent=`Hue ${Math.round(h)}°`;}
- }
- calOverlay.style.display="none";startGame();
-};
-skipBtn.onclick=()=>{clearDebugError();calOverlay.style.display="none";startGame()};
-
-async function loadMediaPipe(){
- if(FilesetResolverClass && PoseLandmarkerClass)return;
-
- if(!mediaPipeModulePromise){
-   mediaPipeModulePromise=import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm");
- }
-
- const mod=await mediaPipeModulePromise;
- FilesetResolverClass=mod.FilesetResolver;
- PoseLandmarkerClass=mod.PoseLandmarker;
-}
-
-async function initPose(){
- if(pose)return;
- statusEl.textContent="人体認識AIを読み込み中…";
- await loadMediaPipe();
- const vision=await FilesetResolverClass.forVisionTasks(
-   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
- );
-
- const common={
-   runningMode:"VIDEO",
-   numPoses:1,
-   minPoseDetectionConfidence:.45,
-   minPosePresenceConfidence:.45,
-   minTrackingConfidence:.45
- };
-
- try{
-   pose=await PoseLandmarkerClass.createFromOptions(vision,{
-     baseOptions:{
-       modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
-       delegate:"GPU"
-     },
-     ...common
-   });
- }catch(err){
-   console.warn("GPU初期化に失敗したためCPUで再試行します",err);
-   statusEl.textContent="CPUモードで人体認識AIを読み込み中…";
-   pose=await PoseLandmarkerClass.createFromOptions(vision,{
-     baseOptions:{
-       modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
-     },
-     ...common
-   });
- }
- statusEl.textContent="人体認識AI 準備完了";
-}
-
-function startGame(){
- clearDebugError();
- hud.style.display="block";resultOverlay.style.display="none";
- score=0;combo=0;scoreEl.textContent="0";comboEl.textContent="0";timeEl.textContent=duration;
- enemies=[];bolts=[];particles=[];balloons=[];hands=[];
- startAt=performance.now();lastSpawn=0;lastPoseDetectAt=0;lastSaberDetectAt=0;last=0;gameStarted=true;gameEnded=false;
- if(mode==="balloon"){
-   gameTitle.textContent="BALLOON PANIC";gameSubtitle.textContent="両手で風船を割ろう！";
-   comboWrap.style.display="none";detect.style.display="none";statusEl.textContent="手で風船を割ろう！";
- }else{
-   gameTitle.textContent="LASER GUARD";gameSubtitle.textContent="実物ライトセーバーでレーザーを跳ね返せ！";
-   comboWrap.style.display="block";detect.style.display="block";statusEl.textContent="ライトセーバーでレーザーを跳ね返せ！";
- }
-}
-
-function restartSameMode(){
- resultOverlay.style.display="none";
- if(mode==="laser")calOverlay.style.display="flex";
- else startGame();
-}
-
-function showMenu(){
- clearDebugError();
- gameStarted=false;gameEnded=false;hud.style.display="none";resultOverlay.style.display="none";cameraOverlay.style.display="none";calOverlay.style.display="none";menuOverlay.style.display="flex";
-}
-
-let bodyPoints=[];
-let smoothedHands=[null,null];
-
-function lerp(a,b,t){return a+(b-a)*t}
-
-function updatePose(now){
- if(now-lastPoseDetectAt<POSE_INTERVAL)return;
- lastPoseDetectAt=now;
-
- hands=[];bodyPoints=[];
- if(!pose||video.readyState<2||video.currentTime===lastVideoTime)return;
- lastVideoTime=video.currentTime;
- const res=pose.detectForVideo(video,now);
- if(!res.landmarks?.length)return;
- const lm=res.landmarks[0];
-
- // 体の主要ポイントを可視化用に保存
- const bodyIdx=[11,12,13,14,15,16,23,24];
- bodyPoints=bodyIdx.map(i=>{
-   const p=lm[i];
-   return p?{i,x:(1-p.x)*innerWidth,y:p.y*innerHeight,v:(p.visibility??1)}:null;
- }).filter(Boolean);
-
- [15,16].forEach((i,idx)=>{
-   const p=lm[i];
-   if(p&&(p.visibility??1)>.35){
-     const tx=(1-p.x)*innerWidth,ty=p.y*innerHeight;
-     if(!smoothedHands[idx]) smoothedHands[idx]={x:tx,y:ty};
-     const smoothing=.34;
-     smoothedHands[idx].x=lerp(smoothedHands[idx].x,tx,smoothing);
-     smoothedHands[idx].y=lerp(smoothedHands[idx].y,ty,smoothing);
-     hands.push({x:smoothedHands[idx].x,y:smoothedHands[idx].y,r:46,index:idx});
-   }
- });
-}
-
-const small=document.createElement("canvas");small.width=320;small.height=180;
-const sctx=small.getContext("2d",{willReadFrequently:true});
-function rgbToHsv(r,g,b){
- r/=255;g/=255;b/=255;const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;let h=0;
- if(d){if(max===r)h=60*(((g-b)/d)%6);else if(max===g)h=60*(((b-r)/d)+2);else h=60*(((r-g)/d)+4)}
- if(h<0)h+=360;return[h,max===0?0:d/max,max]
-}
-function hueDist(a,b){const d=Math.abs(a-b)%360;return Math.min(d,360-d)}
-
-function detectSaber(){
-  saber.valid=false;saber.confidence=0;
-  if(video.readyState<2)return;
-
-  const W=small.width,H=small.height;
-  sctx.save();
-  sctx.translate(W,0);sctx.scale(-1,1);
-  sctx.drawImage(video,0,0,W,H);
-  sctx.restore();
-
-  const img=sctx.getImageData(0,0,W,H),d=img.data;
-  let pts=[];
-  for(let y=0;y<H;y+=2){
-    for(let x=0;x<W;x+=2){
-      const i=(y*W+x)*4;
-      const [h,s,v]=rgbToHsv(d[i],d[i+1],d[i+2]);
-      const bright=Math.max(d[i],d[i+1],d[i+2])/255;
-      // User-selected hue + brightness; allow blown-out white core via neighboring saturation.
-      if((hueDist(h,targetHue)<=hueTolerance && s>=minSat && v>=minVal) || (bright>.92 && s>.12)){
-        pts.push({x,y,w:Math.max(.2,s)*v});
-      }
+cameraBtn.addEventListener("click",async()=>{
+  clearError();cameraBtn.disabled=true;
+  try{
+    await ensureCamera();
+    if(!running){running=true;lastFrame=0;requestAnimationFrame(loop)}
+    if(mode==="laser"){
+      cameraBtn.disabled=false;
+      showScreen(calScreen);
+    }else{
+      cameraTitle.textContent="LOADING...";
+      cameraText.innerHTML="人体認識AIを準備しています。<br>初回のみ数秒かかります。";
+      await ensurePose();
+      cameraBtn.disabled=false;
+      showScreen(null);
+      beginGame();
     }
+  }catch(err){
+    cameraBtn.disabled=false;
+    cameraError.textContent=err?.message||"起動に失敗しました";
+    showError(err,"START");
   }
-  if(pts.length<22){
-    detText.textContent="SEARCHING";
-    confidenceEl.textContent="0";
-    return;
+});
+
+async function ensureCamera(){
+  if(stream)return;
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:1280},height:{ideal:720}},audio:false});
+  video.srcObject=stream;
+  await video.play();
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+}
+
+async function ensurePose(){
+  if(pose)return;
+  if(!MP)MP=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm");
+  const vision=await MP.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+  try{
+    pose=await MP.PoseLandmarker.createFromOptions(vision,{
+      baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",delegate:"GPU"},
+      runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.45,minPosePresenceConfidence:.45,minTrackingConfidence:.45
+    });
+  }catch(e){
+    pose=await MP.PoseLandmarker.createFromOptions(vision,{
+      baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"},
+      runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.45,minPosePresenceConfidence:.45,minTrackingConfidence:.45
+    });
   }
+}
 
-  let sw=0,mx=0,my=0;
-  for(const p of pts){sw+=p.w;mx+=p.x*p.w;my+=p.y*p.w}
-  mx/=sw;my/=sw;
-
-  let cxx=0,cyy=0,cxy=0;
-  for(const p of pts){
-    const dx=p.x-mx,dy=p.y-my;
-    cxx+=p.w*dx*dx;cyy+=p.w*dy*dy;cxy+=p.w*dx*dy;
+function beginGame(){
+  clearError();hud.style.display="block";
+  score=0;combo=0;scoreEl.textContent="0";comboEl.textContent="0";timeEl.textContent=duration;
+  balloons=[];particles=[];enemies=[];bolts=[];hands=[];bodyPoints=[];saberTrail=[];
+  startAt=performance.now();lastSpawn=0;gameStarted=true;gameEnded=false;
+  if(mode==="balloon"){
+    gameTitle.textContent="BALLOON PANIC";gameSubtitle.textContent="両手で風船を割ろう！";
+    comboWrap.style.display="none";detectBox.style.display="none";statusEl.textContent="手で風船を割ろう！";
+  }else{
+    gameTitle.textContent="LASER GUARD";gameSubtitle.textContent="実物ライトセーバーでレーザーを跳ね返せ！";
+    comboWrap.style.display="block";detectBox.style.display="block";statusEl.textContent="ライトセーバーでレーザーを跳ね返せ！";
   }
-  cxx/=sw;cyy/=sw;cxy/=sw;
-  const theta=.5*Math.atan2(2*cxy,cxx-cyy);
-  const ux=Math.cos(theta),uy=Math.sin(theta);
-
-  let minP=Infinity,maxP=-Infinity;
-  let orthoSum=0;
-  for(const p of pts){
-    const dx=p.x-mx,dy=p.y-my;
-    const proj=dx*ux+dy*uy;
-    const ortho=-dx*uy+dy*ux;
-    minP=Math.min(minP,proj);maxP=Math.max(maxP,proj);
-    orthoSum+=Math.abs(ortho);
-  }
-  const length=maxP-minP;
-  const meanOrtho=orthoSum/pts.length;
-  const elong=length/(meanOrtho*2+1);
-
-  const conf=Math.max(0,Math.min(1,(pts.length/260)*.35 + Math.min(1,elong/8)*.65));
-  if(length<42 || elong<2.7){
-    detText.textContent="SEARCHING";
-    confidenceEl.textContent=Math.round(conf*100);
-    return;
-  }
-
-  // 検出した発光部分から「位置」と「角度」だけを使い、
-  // ゲーム内の剣の長さは固定する。
-  // これにより、反射光や残像を拾ったときに剣が異常に長くなるのを防ぐ。
-  const rawX1=(mx+ux*minP)/W*innerWidth;
-  const rawY1=(my+uy*minP)/H*innerHeight;
-  const rawX2=(mx+ux*maxP)/W*innerWidth;
-  const rawY2=(my+uy*maxP)/H*innerHeight;
-
-  const cx=(rawX1+rawX2)/2;
-  const cy=(rawY1+rawY2)/2;
-
-  const rawDx=rawX2-rawX1;
-  const rawDy=rawY2-rawY1;
-  const rawLen=Math.hypot(rawDx,rawDy)||1;
-  const dirX=rawDx/rawLen;
-  const dirY=rawDy/rawLen;
-
-  // 画面サイズに応じた固定長。大画面でも長くなりすぎない。
-  const FIXED_SABER_LENGTH=Math.max(220,Math.min(330,innerHeight*0.36));
-  const half=FIXED_SABER_LENGTH/2;
-
-  let nx1=cx-dirX*half;
-  let ny1=cy-dirY*half;
-  let nx2=cx+dirX*half;
-  let ny2=cy+dirY*half;
-
-  // 少しだけ平滑化してガタつきを抑える。
-  if(saber.valid){
-    const SMOOTH=.42;
-    nx1=saber.x1*(1-SMOOTH)+nx1*SMOOTH;
-    ny1=saber.y1*(1-SMOOTH)+ny1*SMOOTH;
-    nx2=saber.x2*(1-SMOOTH)+nx2*SMOOTH;
-    ny2=saber.y2*(1-SMOOTH)+ny2*SMOOTH;
-  }
-
-  saber={valid:true,x1:nx1,y1:ny1,x2:nx2,y2:ny2,confidence:conf};
-  detText.textContent="DETECTED ✓";
-  confidenceEl.textContent=Math.round(conf*100);
 }
-function sampleHueNearSegment(seg){
- if(video.readyState<2)return null;
- const W=small.width,H=small.height,x1=seg.x1/innerWidth*W,y1=seg.y1/innerHeight*H,x2=seg.x2/innerWidth*W,y2=seg.y2/innerHeight*H,img=sctx.getImageData(0,0,W,H).data;
- let sx=0,sy=0,count=0;
- for(let i=0;i<30;i++){const t=i/29,x=Math.round(x1+(x2-x1)*t),y=Math.round(y1+(y2-y1)*t);if(x<0||y<0||x>=W||y>=H)continue;
-   const idx=(y*W+x)*4,[h,s,v]=rgbToHsv(img[idx],img[idx+1],img[idx+2]);if(s>.25&&v>.45){const rad=h*Math.PI/180;sx+=Math.cos(rad);sy+=Math.sin(rad);count++}}
- if(!count)return null;let h=Math.atan2(sy/count,sx/count)*180/Math.PI;if(h<0)h+=360;return h
-}
-
-function pointSegDist(px,py,x1,y1,x2,y2){
- const vx=x2-x1,vy=y2-y1,wx=px-x1,wy=py-y1,c1=vx*wx+vy*wy;if(c1<=0)return Math.hypot(px-x1,py-y1);
- const c2=vx*vx+vy*vy;if(c2<=c1)return Math.hypot(px-x2,py-y2);const b=c1/c2,bx=x1+b*vx,by=y1+b*vy;return Math.hypot(px-bx,py-by)
-}
-function burst(x,y,color,n=12){
- for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=70+Math.random()*240;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,age:0,life:.5+Math.random()*.25,color})}
-}
-function sound(freq,dur){
- if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type="sawtooth";
- o.frequency.setValueAtTime(freq,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(Math.max(70,freq*.45),audioCtx.currentTime+dur);
- g.gain.setValueAtTime(.05,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);o.start();o.stop(audioCtx.currentTime+dur)
-}
-
-function popWhoosh(special=false){
- if(!audioCtx)return;
- const now=audioCtx.currentTime;
- const osc=audioCtx.createOscillator();
- const gain=audioCtx.createGain();
- const filter=audioCtx.createBiquadFilter();
- osc.type="triangle";
- osc.frequency.setValueAtTime(special?980:650,now);
- osc.frequency.exponentialRampToValueAtTime(130,now+.12);
- filter.type="lowpass";
- filter.frequency.setValueAtTime(1800,now);
- gain.gain.setValueAtTime(.08,now);
- gain.gain.exponentialRampToValueAtTime(.001,now+.14);
- osc.connect(filter);filter.connect(gain);gain.connect(audioCtx.destination);
- osc.start(now);osc.stop(now+.15);
-}
-
-function laserReflectSound(){
- if(!audioCtx)return;
- const now=audioCtx.currentTime;
- const osc=audioCtx.createOscillator();
- const gain=audioCtx.createGain();
- osc.type="square";
- osc.frequency.setValueAtTime(900,now);
- osc.frequency.exponentialRampToValueAtTime(260,now+.09);
- gain.gain.setValueAtTime(.06,now);
- gain.gain.exponentialRampToValueAtTime(.001,now+.11);
- osc.connect(gain);gain.connect(audioCtx.destination);
- osc.start(now);osc.stop(now+.12);
-}
-
-function enemyExplosionSound(){
- if(!audioCtx)return;
- const now=audioCtx.currentTime;
- const osc=audioCtx.createOscillator();
- const gain=audioCtx.createGain();
- osc.type="sawtooth";
- osc.frequency.setValueAtTime(180,now);
- osc.frequency.exponentialRampToValueAtTime(55,now+.18);
- gain.gain.setValueAtTime(.07,now);
- gain.gain.exponentialRampToValueAtTime(.001,now+.20);
- osc.connect(gain);gain.connect(audioCtx.destination);
- osc.start(now);osc.stop(now+.22);
-}
-
-function updateBalloon(now,dt){
- if(now-lastSpawn>720){
-   lastSpawn=now;
-   const r=Math.max(28,Math.min(52,innerWidth*.035));
-   const special=Math.random()<.12;
-   balloons.push({
-     x:r+Math.random()*(innerWidth-r*2),
-     y:-r,
-     r,
-     speed:105+Math.random()*85,
-     swayAmp:18+Math.random()*32,
-     swaySpeed:.0012+Math.random()*.0011,
-     color:special?"#ffd84d":["#ff5470","#4dd7ff","#7fef9b"][Math.floor(Math.random()*3)],
-     pts:special?30:10,
-     born:now,
-     pop:false,
-     scale:.25,
-     rot:(Math.random()-.5)*.12
-   });
- }
- for(const b of balloons){
-   // なめらかな出現
-   b.scale=lerp(b.scale,1,Math.min(1,dt*7));
-   b.y+=b.speed*dt;
-   b.x+=Math.sin((now-b.born)*b.swaySpeed)*b.swayAmp*dt;
-
-   for(const h of hands){
-     if(!b.pop&&Math.hypot(b.x-h.x,b.y-h.y)<b.r+h.r){
-       b.pop=true;
-       score+=b.pts;
-       scoreEl.textContent=score;
-       burst(b.x,b.y,b.color,20);
-       sound(b.pts>=30?820:470,.10);
-       popWhoosh(b.pts>=30);
-     }
-   }
- }
- balloons=balloons.filter(b=>!b.pop&&b.y<innerHeight+b.r+20)
-}
-
-function spawnEnemy(now){
- if(enemies.length>=4)return;const margin=110,e={x:margin+Math.random()*(innerWidth-margin*2),y:120+Math.random()*150,r:34,baseX:0,phase:Math.random()*Math.PI*2,alive:true};e.baseX=e.x;enemies.push(e)
-}
-function shoot(e){
- const tx=innerWidth*.5+(Math.random()-.5)*220,ty=innerHeight*.82,dx=tx-e.x,dy=ty-e.y,l=Math.hypot(dx,dy)||1,s=420+Math.random()*90;
- bolts.push({x:e.x,y:e.y,vx:dx/l*s,vy:dy/l*s,ref:false,dead:false});sound(150,.04)
-}
-function updateLaser(now,dt){
- if(now-lastSpawn>1700){spawnEnemy(now);lastSpawn=now}
- for(const e of enemies){e.x=e.baseX+Math.sin(now/900+e.phase)*42;if(Math.random()<dt*.52)shoot(e)}
- for(const b of bolts){
-   b.x+=b.vx*dt;b.y+=b.vy*dt;
-   if(saber.valid&&!b.ref&&pointSegDist(b.x,b.y,saber.x1,saber.y1,saber.x2,saber.y2)<30){
-     b.ref=true;combo++;comboEl.textContent=combo;const live=enemies.filter(e=>e.alive);
-     if(live.length){const t=live.reduce((a,e)=>Math.hypot(e.x-b.x,e.y-b.y)<Math.hypot(a.x-b.x,a.y-b.y)?e:a),dx=t.x-b.x,dy=t.y-b.y,l=Math.hypot(dx,dy)||1,s=680;b.vx=dx/l*s;b.vy=dy/l*s}else{b.vx*=-1.2;b.vy*=-1.2}
-     burst(b.x,b.y,"#93eeff",18);sound(760,.07);laserReflectSound()
-   }
-   if(b.ref){for(const e of enemies)if(e.alive&&Math.hypot(b.x-e.x,b.y-e.y)<e.r+10){e.alive=false;b.dead=true;score+=100+Math.min(combo,10)*20;scoreEl.textContent=score;burst(e.x,e.y,"#ff914a",26);sound(100,.11);enemyExplosionSound()}}
-   else if(b.y>innerHeight-70){b.dead=true;combo=0;comboEl.textContent="0";burst(b.x,innerHeight-70,"#ff405a",14)}
-   if(b.x<-80||b.x>innerWidth+80||b.y<-80||b.y>innerHeight+120)b.dead=true
- }
- bolts=bolts.filter(b=>!b.dead);enemies=enemies.filter(e=>e.alive)
-}
-
-function update(now,dt){
- try{
-   if(mode==="balloon"){
-     if(pose)updatePose(now);
-   }else if(mode==="laser"){
-     detectSaber(now);
-   }
- }catch(err){
-   showDebugError(err, mode==="laser" ? "SABER DETECTION" : "POSE DETECTION");
-   throw err;
- }
-
- if(!gameStarted||gameEnded)return;
-
- const elapsed=(now-startAt)/1000;
- const rem=Math.max(0,Math.ceil(duration-elapsed));
- timeEl.textContent=rem;
- if(elapsed>=duration){endGame();return}
-
- try{
-   if(mode==="balloon")updateBalloon(now,dt);
-   else updateLaser(now,dt);
- }catch(err){
-   showDebugError(err, mode==="laser" ? "LASER GAME LOGIC" : "BALLOON GAME LOGIC");
-   throw err;
- }
-
- for(const p of particles){
-   p.age+=dt;
-   p.x+=p.vx*dt;
-   p.y+=p.vy*dt;
-   p.vy+=270*dt
- }
- particles=particles.filter(p=>p.age<p.life)
-}
-
-function drawBg(){
- const g=ctx.createLinearGradient(0,0,0,innerHeight);g.addColorStop(0,"#0a1d3a");g.addColorStop(1,"#020711");ctx.fillStyle=g;ctx.fillRect(0,0,innerWidth,innerHeight);
- if(video.readyState>=2){ctx.save();ctx.globalAlpha=.30;ctx.translate(innerWidth,0);ctx.scale(-1,1);const vw=video.videoWidth,vh=video.videoHeight,sc=Math.max(innerWidth/vw,innerHeight/vh),dw=vw*sc,dh=vh*sc;ctx.drawImage(video,(innerWidth-dw)/2,(innerHeight-dh)/2,dw,dh);ctx.restore();ctx.fillStyle="rgba(2,8,18,.42)";ctx.fillRect(0,0,innerWidth,innerHeight)}
-}
-function drawBalloon(b){
- ctx.save();
- ctx.translate(b.x,b.y);
- ctx.rotate(b.rot||0);
- ctx.scale(b.scale||1,b.scale||1);
-
- ctx.shadowColor=b.color;
- ctx.shadowBlur=18;
-
- const g=ctx.createRadialGradient(-b.r*.25,-b.r*.35,4,0,0,b.r*1.1);
- g.addColorStop(0,"rgba(255,255,255,.95)");
- g.addColorStop(.18,b.color);
- g.addColorStop(1,"rgba(0,0,0,.20)");
- ctx.fillStyle=g;
- ctx.beginPath();
- ctx.ellipse(0,0,b.r*.78,b.r,0,0,Math.PI*2);
- ctx.fill();
-
- ctx.shadowBlur=0;
- ctx.fillStyle="rgba(255,255,255,.5)";
- ctx.beginPath();
- ctx.ellipse(-b.r*.22,-b.r*.30,b.r*.12,b.r*.22,-.4,0,Math.PI*2);
- ctx.fill();
-
- ctx.fillStyle=b.color;
- ctx.beginPath();
- ctx.moveTo(-6,b.r*.9);ctx.lineTo(0,b.r+10);ctx.lineTo(6,b.r*.9);ctx.fill();
-
- ctx.strokeStyle="rgba(255,255,255,.45)";
- ctx.lineWidth=2;
- ctx.beginPath();ctx.moveTo(0,b.r+9);ctx.quadraticCurveTo(8,b.r+28,-3,b.r+46);ctx.stroke();
-
- if(b.pts>=30){
-   ctx.fillStyle="#4b3900";
-   ctx.font=`900 ${Math.max(17,b.r*.52)}px system-ui`;
-   ctx.textAlign="center";ctx.textBaseline="middle";
-   ctx.fillText("★",0,1);
- }
- ctx.restore()
-}
-function drawHands(){
- // 腕のラインを描画して、自分の動きを分かりやすくする
- const byId={};
- for(const p of bodyPoints)byId[p.i]=p;
-
- const limbs=[[11,13],[13,15],[12,14],[14,16],[11,12]];
- ctx.save();
- ctx.lineCap="round";
- for(const [a,b] of limbs){
-   if(byId[a]&&byId[b]){
-     const grad=ctx.createLinearGradient(byId[a].x,byId[a].y,byId[b].x,byId[b].y);
-     grad.addColorStop(0,"rgba(70,210,255,.25)");
-     grad.addColorStop(1,"rgba(110,245,255,.85)");
-     ctx.strokeStyle=grad;
-     ctx.shadowColor="#56ddff";
-     ctx.shadowBlur=12;
-     ctx.lineWidth=8;
-     ctx.beginPath();
-     ctx.moveTo(byId[a].x,byId[a].y);
-     ctx.lineTo(byId[b].x,byId[b].y);
-     ctx.stroke();
-   }
- }
- ctx.restore();
-
- for(const h of hands){
-   const grd=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,h.r);
-   grd.addColorStop(0,"rgba(255,255,255,1)");
-   grd.addColorStop(.20,"rgba(87,220,255,.95)");
-   grd.addColorStop(.55,"rgba(87,220,255,.35)");
-   grd.addColorStop(1,"rgba(87,220,255,0)");
-   ctx.fillStyle=grd;
-   ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();
-
-   ctx.save();
-   ctx.strokeStyle="rgba(255,255,255,.95)";
-   ctx.shadowColor="#56ddff";
-   ctx.shadowBlur=14;
-   ctx.lineWidth=3;
-   ctx.beginPath();ctx.arc(h.x,h.y,20,0,Math.PI*2);ctx.stroke();
-   ctx.restore();
- }
-}
-function drawBolt(b){
- const m=Math.hypot(b.vx,b.vy)||1,ux=b.vx/m,uy=b.vy/m,len=34;ctx.save();ctx.strokeStyle=b.ref?"#72e9ff":"#ff405a";ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=18;ctx.lineWidth=7;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(b.x-ux*len,b.y-uy*len);ctx.lineTo(b.x+ux*len,b.y+uy*len);ctx.stroke();ctx.restore()
-}
-
-function drawEnemy(e){
- ctx.save();
- ctx.translate(e.x,e.y);
-
- // 赤い発光
- ctx.shadowColor="#ff334c";
- ctx.shadowBlur=22;
-
- // ドローン本体
- ctx.fillStyle="#151b27";
- ctx.beginPath();
- ctx.arc(0,0,e.r,0,Math.PI*2);
- ctx.fill();
-
- // 横ウイング
- ctx.fillStyle="#2a3140";
- ctx.fillRect(-e.r-18,-7,e.r*2+36,14);
-
- // 中央の赤いセンサー
- ctx.fillStyle="#ff334c";
- ctx.fillRect(-18,-5,36,10);
-
- ctx.restore();
-}
-
-function drawBolt(b){
- const m=Math.hypot(b.vx,b.vy)||1;
- const ux=b.vx/m,uy=b.vy/m;
- const len=34;
-
- ctx.save();
- ctx.strokeStyle=b.ref?"#72e9ff":"#ff405a";
- ctx.shadowColor=ctx.strokeStyle;
- ctx.shadowBlur=18;
- ctx.lineWidth=7;
- ctx.lineCap="round";
-
- ctx.beginPath();
- ctx.moveTo(b.x-ux*len,b.y-uy*len);
- ctx.lineTo(b.x+ux*len,b.y+uy*len);
- ctx.stroke();
-
- ctx.restore();
-}
-
-let saberTrail=[];
-function drawSaber(){
- if(!saber.valid){
-   // 徐々に残光だけ消す
-   if(saberTrail.length>0)saberTrail.shift();
-   return;
- }
-
- // 描画専用のコピーを残光に保存。追跡データ自体は変更しない。
- saberTrail.push({
-   x1:saber.x1,y1:saber.y1,
-   x2:saber.x2,y2:saber.y2
- });
- if(saberTrail.length>6)saberTrail.shift();
-
- ctx.save();
-
- for(let i=0;i<saberTrail.length-1;i++){
-   const s=saberTrail[i];
-   const alpha=.03 + (i/saberTrail.length)*.10;
-   ctx.strokeStyle=`hsla(${targetHue},100%,70%,${alpha})`;
-   ctx.lineWidth=10 + i*1.5;
-   ctx.lineCap="round";
-   ctx.beginPath();
-   ctx.moveTo(s.x1,s.y1);
-   ctx.lineTo(s.x2,s.y2);
-   ctx.stroke();
- }
-
- ctx.strokeStyle=`hsl(${targetHue} 100% 70%)`;
- ctx.shadowColor=`hsl(${targetHue} 100% 55%)`;
- ctx.shadowBlur=28;
- ctx.lineWidth=18;
- ctx.lineCap="round";
- ctx.beginPath();
- ctx.moveTo(saber.x1,saber.y1);
- ctx.lineTo(saber.x2,saber.y2);
- ctx.stroke();
-
- ctx.strokeStyle="#fff";
- ctx.shadowBlur=9;
- ctx.lineWidth=6;
- ctx.beginPath();
- ctx.moveTo(saber.x1,saber.y1);
- ctx.lineTo(saber.x2,saber.y2);
- ctx.stroke();
-
- ctx.restore();
-}
-function drawParticles(){for(const p of particles){ctx.globalAlpha=1-p.age/p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1}
+function goMenu(){gameStarted=false;hud.style.display="none";showScreen(menu);clearError()}
 
 function loop(now){
- if(!running)return;
-
- try{
-   const dt=Math.min(.033,last?(now-last)/1000:.016);
-   last=now;
-
-   update(now,dt);
-   drawBg();
-
-   if(mode==="balloon"){
-     balloons.forEach(drawBalloon);
-     drawHands();
-   }else if(mode==="laser"){
-     enemies.forEach(drawEnemy);
-     bolts.forEach(drawBolt);
-     drawSaber();
-   }
-
-   drawParticles();
-
-   // 直前までエラーだったが復旧したら、数フレーム後に表示を消す
-   if(runtimeErrorCount>0){
-     runtimeErrorCount=Math.max(0,runtimeErrorCount-1);
-     if(runtimeErrorCount===0)clearDebugError();
-   }
- }catch(err){
-   runtimeErrorCount++;
-   console.error("Game loop error:",err);
-   if(!lastRuntimeError)showDebugError(err,"GAME LOOP");
-   statusEl.textContent=`エラー検出中… (${runtimeErrorCount})`;
- }
-
- requestAnimationFrame(loop);
+  if(!running)return;
+  try{
+    const dt=Math.min(.033,lastFrame?(now-lastFrame)/1000:.016);lastFrame=now;
+    if(mode==="balloon"&&pose&&now-lastPoseAt>66){lastPoseAt=now;updatePose(now)}
+    if(mode==="laser"&&now-lastSaberAt>50){lastSaberAt=now;detectSaber()}
+    if(gameStarted){
+      const elapsed=(now-startAt)/1000;
+      timeEl.textContent=Math.max(0,Math.ceil(duration-elapsed));
+      if(elapsed>=duration)finish();
+      else if(mode==="balloon")updateBalloon(now,dt);
+      else updateLaser(now,dt);
+    }
+    updateParticles(dt);
+    drawBg();
+    if(mode==="balloon"){balloons.forEach(drawBalloon);drawBody()}
+    else if(mode==="laser"){enemies.forEach(drawEnemy);bolts.forEach(drawBolt);drawSaber()}
+    drawParticles();
+  }catch(err){showError(err,"GAME LOOP")}
+  requestAnimationFrame(loop);
 }
 
-function endGame(){
- gameEnded=true;gameStarted=false;resultScore.textContent=`SCORE ${score}`;
- resultText.textContent=mode==="laser"?`最大コンボ：${combo}`:"もう一度挑戦してハイスコアを目指そう！";
- resultOverlay.style.display="flex"
+function updatePose(now){
+  if(video.readyState<2||video.currentTime===lastVideoTime)return;
+  lastVideoTime=video.currentTime;
+  const res=pose.detectForVideo(video,now);
+  hands=[];bodyPoints=[];
+  if(!res.landmarks?.length)return;
+  const lm=res.landmarks[0];
+  [11,12,13,14,15,16].forEach(i=>{const p=lm[i];if(p)bodyPoints.push({i,x:(1-p.x)*innerWidth,y:p.y*innerHeight})});
+  [15,16].forEach((i,k)=>{
+    const p=lm[i];if(!p||(p.visibility??1)<.35)return;
+    const tx=(1-p.x)*innerWidth,ty=p.y*innerHeight;
+    if(!smoothHands[k])smoothHands[k]={x:tx,y:ty};
+    smoothHands[k].x+=(tx-smoothHands[k].x)*.34;
+    smoothHands[k].y+=(ty-smoothHands[k].y)*.34;
+    hands.push({x:smoothHands[k].x,y:smoothHands[k].y,r:46});
+  });
 }
+function spawnBalloon(now){
+  const r=Math.max(28,Math.min(52,innerWidth*.035)),special=Math.random()<.12;
+  balloons.push({x:r+Math.random()*(innerWidth-r*2),y:-r,r,speed:105+Math.random()*85,sway:18+Math.random()*32,phase:Math.random()*6.28,born:now,scale:.25,color:special?"#ffd84d":["#ff5470","#4dd7ff","#7fef9b"][Math.floor(Math.random()*3)],pts:special?30:10,pop:false});
+}
+function updateBalloon(now,dt){
+  if(now-lastSpawn>720){lastSpawn=now;spawnBalloon(now)}
+  balloons.forEach(b=>{
+    b.scale+=(1-b.scale)*Math.min(1,dt*7);b.y+=b.speed*dt;b.x+=Math.sin((now-b.born)*.0015+b.phase)*b.sway*dt;
+    hands.forEach(h=>{if(!b.pop&&Math.hypot(b.x-h.x,b.y-h.y)<b.r+h.r){b.pop=true;score+=b.pts;scoreEl.textContent=score;burst(b.x,b.y,b.color,20);popSound(b.pts>=30)}})
+  });
+  balloons=balloons.filter(b=>!b.pop&&b.y<innerHeight+b.r+20);
+}
+
+function rgbToHsv(r,g,b){r/=255;g/=255;b/=255;const M=Math.max(r,g,b),m=Math.min(r,g,b),d=M-m;let h=0;if(d){if(M===r)h=60*(((g-b)/d)%6);else if(M===g)h=60*((b-r)/d+2);else h=60*((r-g)/d+4)}if(h<0)h+=360;return[h,M===0?0:d/M,M]}
+function hueDist(a,b){const d=Math.abs(a-b)%360;return Math.min(d,360-d)}
+function detectSaber(){
+  saber.valid=false;
+  if(video.readyState<2)return;
+  const W=small.width,H=small.height;
+  sctx.save();sctx.translate(W,0);sctx.scale(-1,1);sctx.drawImage(video,0,0,W,H);sctx.restore();
+  const data=sctx.getImageData(0,0,W,H).data,pts=[];
+  for(let y=0;y<H;y+=2)for(let x=0;x<W;x+=2){
+    const i=(y*W+x)*4,[h,s,v]=rgbToHsv(data[i],data[i+1],data[i+2]),bright=Math.max(data[i],data[i+1],data[i+2])/255;
+    if((hueDist(h,targetHue)<=28&&s>=.38&&v>=.42)||(bright>.92&&s>.12))pts.push({x,y,w:Math.max(.2,s)*v});
+  }
+  if(pts.length<22){detText.textContent="SEARCHING";confidenceEl.textContent="0";return}
+  let sw=0,mx=0,my=0;pts.forEach(p=>{sw+=p.w;mx+=p.x*p.w;my+=p.y*p.w});mx/=sw;my/=sw;
+  let cxx=0,cyy=0,cxy=0;pts.forEach(p=>{const dx=p.x-mx,dy=p.y-my;cxx+=p.w*dx*dx;cyy+=p.w*dy*dy;cxy+=p.w*dx*dy});cxx/=sw;cyy/=sw;cxy/=sw;
+  const th=.5*Math.atan2(2*cxy,cxx-cyy),ux=Math.cos(th),uy=Math.sin(th);
+  let minP=Infinity,maxP=-Infinity,ortho=0;pts.forEach(p=>{const dx=p.x-mx,dy=p.y-my,pr=dx*ux+dy*uy;minP=Math.min(minP,pr);maxP=Math.max(maxP,pr);ortho+=Math.abs(-dx*uy+dy*ux)});
+  const length=maxP-minP,elong=length/((ortho/pts.length)*2+1),conf=Math.max(0,Math.min(1,(pts.length/260)*.35+Math.min(1,elong/8)*.65));
+  if(length<42||elong<2.7){detText.textContent="SEARCHING";confidenceEl.textContent=Math.round(conf*100);return}
+  const a={x:(mx+ux*minP)/W*innerWidth,y:(my+uy*minP)/H*innerHeight},b={x:(mx+ux*maxP)/W*innerWidth,y:(my+uy*maxP)/H*innerHeight};
+  const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy)||1,dirx=dx/L,diry=dy/L,fixed=Math.max(220,Math.min(330,innerHeight*.36)),half=fixed/2;
+  saber={valid:true,x1:cx-dirx*half,y1:cy-diry*half,x2:cx+dirx*half,y2:cy+diry*half,confidence:conf};
+  detText.textContent="DETECTED ✓";confidenceEl.textContent=Math.round(conf*100);
+}
+function sampleHue(){
+  if(!saber.valid)return null;
+  const W=small.width,H=small.height,data=sctx.getImageData(0,0,W,H).data;
+  const x1=saber.x1/innerWidth*W,y1=saber.y1/innerHeight*H,x2=saber.x2/innerWidth*W,y2=saber.y2/innerHeight*H;
+  let sx=0,sy=0,n=0;
+  for(let i=0;i<30;i++){const t=i/29,x=Math.round(x1+(x2-x1)*t),y=Math.round(y1+(y2-y1)*t);if(x<0||y<0||x>=W||y>=H)continue;const k=(y*W+x)*4,[h,s,v]=rgbToHsv(data[k],data[k+1],data[k+2]);if(s>.25&&v>.45){const r=h*Math.PI/180;sx+=Math.cos(r);sy+=Math.sin(r);n++}}
+  if(!n)return null;let h=Math.atan2(sy/n,sx/n)*180/Math.PI;if(h<0)h+=360;return h;
+}
+function spawnEnemy(){if(enemies.length>=4)return;const m=110,e={x:m+Math.random()*(innerWidth-m*2),y:120+Math.random()*150,r:34,baseX:0,phase:Math.random()*6.28,alive:true};e.baseX=e.x;enemies.push(e)}
+function shoot(e){const tx=innerWidth*.5+(Math.random()-.5)*220,ty=innerHeight*.82,dx=tx-e.x,dy=ty-e.y,L=Math.hypot(dx,dy)||1,s=420+Math.random()*90;bolts.push({x:e.x,y:e.y,vx:dx/L*s,vy:dy/L*s,ref:false,dead:false});tone(150,.04)}
+function segDist(px,py,x1,y1,x2,y2){const vx=x2-x1,vy=y2-y1,wx=px-x1,wy=py-y1,c1=vx*wx+vy*wy;if(c1<=0)return Math.hypot(px-x1,py-y1);const c2=vx*vx+vy*vy;if(c2<=c1)return Math.hypot(px-x2,py-y2);const t=c1/c2,bx=x1+t*vx,by=y1+t*vy;return Math.hypot(px-bx,py-by)}
+function updateLaser(now,dt){
+  if(now-lastSpawn>1700){lastSpawn=now;spawnEnemy()}
+  enemies.forEach(e=>{e.x=e.baseX+Math.sin(now/900+e.phase)*42;if(Math.random()<dt*.52)shoot(e)});
+  bolts.forEach(b=>{
+    b.x+=b.vx*dt;b.y+=b.vy*dt;
+    if(saber.valid&&!b.ref&&segDist(b.x,b.y,saber.x1,saber.y1,saber.x2,saber.y2)<30){
+      b.ref=true;combo++;comboEl.textContent=combo;const live=enemies.filter(e=>e.alive);
+      if(live.length){const t=live.reduce((a,e)=>Math.hypot(e.x-b.x,e.y-b.y)<Math.hypot(a.x-b.x,a.y-b.y)?e:a),dx=t.x-b.x,dy=t.y-b.y,L=Math.hypot(dx,dy)||1;b.vx=dx/L*680;b.vy=dy/L*680}
+      else{b.vx*=-1.2;b.vy*=-1.2}
+      burst(b.x,b.y,"#93eeff",18);tone(760,.07);
+    }
+    if(b.ref)enemies.forEach(e=>{if(e.alive&&Math.hypot(b.x-e.x,b.y-e.y)<e.r+10){e.alive=false;b.dead=true;score+=100+Math.min(combo,10)*20;scoreEl.textContent=score;burst(e.x,e.y,"#ff914a",26);tone(100,.11)}});
+    else if(b.y>innerHeight-70){b.dead=true;combo=0;comboEl.textContent="0"}
+    if(b.x<-80||b.x>innerWidth+80||b.y<-80||b.y>innerHeight+120)b.dead=true;
+  });
+  bolts=bolts.filter(b=>!b.dead);enemies=enemies.filter(e=>e.alive);
+}
+
+function updateParticles(dt){particles.forEach(p=>{p.age+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=270*dt});particles=particles.filter(p=>p.age<p.life)}
+function burst(x,y,color,n){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=70+Math.random()*240;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,age:0,life:.5+Math.random()*.25,color})}}
+function tone(freq,dur){if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type="sawtooth";o.frequency.setValueAtTime(freq,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(Math.max(70,freq*.45),audioCtx.currentTime+dur);g.gain.setValueAtTime(.05,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);o.start();o.stop(audioCtx.currentTime+dur)}
+function popSound(special){tone(special?850:470,.1)}
+
+function drawBg(){
+  const g=ctx.createLinearGradient(0,0,0,innerHeight);g.addColorStop(0,"#0a1d3a");g.addColorStop(1,"#020711");ctx.fillStyle=g;ctx.fillRect(0,0,innerWidth,innerHeight);
+  if(video.readyState>=2){ctx.save();ctx.globalAlpha=.30;ctx.translate(innerWidth,0);ctx.scale(-1,1);const vw=video.videoWidth,vh=video.videoHeight,sc=Math.max(innerWidth/vw,innerHeight/vh),dw=vw*sc,dh=vh*sc;ctx.drawImage(video,(innerWidth-dw)/2,(innerHeight-dh)/2,dw,dh);ctx.restore();ctx.fillStyle="rgba(2,8,18,.42)";ctx.fillRect(0,0,innerWidth,innerHeight)}
+}
+function drawBalloon(b){ctx.save();ctx.translate(b.x,b.y);ctx.scale(b.scale,b.scale);ctx.shadowColor=b.color;ctx.shadowBlur=18;ctx.fillStyle=b.color;ctx.beginPath();ctx.ellipse(0,0,b.r*.78,b.r,0,0,Math.PI*2);ctx.fill();ctx.fillStyle="rgba(255,255,255,.45)";ctx.beginPath();ctx.ellipse(-b.r*.23,-b.r*.3,b.r*.13,b.r*.22,-.4,0,Math.PI*2);ctx.fill();if(b.pts>=30){ctx.fillStyle="#4b3900";ctx.font=`900 ${b.r*.5}px system-ui`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("★",0,0)}ctx.restore()}
+function drawBody(){
+  const by={};bodyPoints.forEach(p=>by[p.i]=p);ctx.save();ctx.lineCap="round";[[11,13],[13,15],[12,14],[14,16],[11,12]].forEach(([a,b])=>{if(by[a]&&by[b]){ctx.strokeStyle="rgba(90,225,255,.75)";ctx.shadowColor="#56ddff";ctx.shadowBlur=12;ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(by[a].x,by[a].y);ctx.lineTo(by[b].x,by[b].y);ctx.stroke()}});ctx.restore();
+  hands.forEach(h=>{const g=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,h.r);g.addColorStop(0,"#fff");g.addColorStop(.25,"rgba(87,220,255,.9)");g.addColorStop(1,"rgba(87,220,255,0)");ctx.fillStyle=g;ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill()});
+}
+function drawEnemy(e){ctx.save();ctx.translate(e.x,e.y);ctx.shadowColor="#ff334c";ctx.shadowBlur=22;ctx.fillStyle="#151b27";ctx.beginPath();ctx.arc(0,0,e.r,0,Math.PI*2);ctx.fill();ctx.fillStyle="#2a3140";ctx.fillRect(-e.r-18,-7,e.r*2+36,14);ctx.fillStyle="#ff334c";ctx.fillRect(-18,-5,36,10);ctx.restore()}
+function drawBolt(b){const L=Math.hypot(b.vx,b.vy)||1,ux=b.vx/L,uy=b.vy/L,len=34;ctx.save();ctx.strokeStyle=b.ref?"#72e9ff":"#ff405a";ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=18;ctx.lineWidth=7;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(b.x-ux*len,b.y-uy*len);ctx.lineTo(b.x+ux*len,b.y+uy*len);ctx.stroke();ctx.restore()}
+function drawSaber(){
+  if(!saber.valid)return;saberTrail.push({...saber});if(saberTrail.length>6)saberTrail.shift();ctx.save();
+  saberTrail.forEach((s,i)=>{ctx.strokeStyle=`hsla(${targetHue},100%,70%,${.03+i*.018})`;ctx.lineWidth=10+i*1.4;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke()});
+  ctx.strokeStyle=`hsl(${targetHue} 100% 70%)`;ctx.shadowColor=`hsl(${targetHue} 100% 55%)`;ctx.shadowBlur=28;ctx.lineWidth=18;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(saber.x1,saber.y1);ctx.lineTo(saber.x2,saber.y2);ctx.stroke();ctx.strokeStyle="#fff";ctx.shadowBlur=9;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(saber.x1,saber.y1);ctx.lineTo(saber.x2,saber.y2);ctx.stroke();ctx.restore()
+}
+function drawParticles(){particles.forEach(p=>{ctx.globalAlpha=1-p.age/p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()});ctx.globalAlpha=1}
+function finish(){gameStarted=false;$("resultScore").textContent=`SCORE ${score}`;$("resultText").textContent=mode==="laser"?`最大コンボ：${combo}`:"もう一度挑戦してハイスコアを目指そう！";showScreen(resultScreen)}
+
+})();
 </script>
 </body>
 </html>
